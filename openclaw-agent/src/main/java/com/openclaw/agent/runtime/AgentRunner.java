@@ -1,0 +1,229 @@
+package com.openclaw.agent.runtime;
+
+import com.openclaw.agent.models.ModelProvider;
+import com.openclaw.agent.models.ModelProviderRegistry;
+import com.openclaw.agent.tools.AgentTool;
+import com.openclaw.agent.tools.ToolRegistry;
+import com.openclaw.common.config.OpenClawConfig;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Core agent execution engine.
+ * Corresponds to TypeScript's pi-embedded-runner.ts.
+ *
+ * <p>
+ * Runs a multi-turn agent loop: user message → LLM → tool calls → LLM → ... →
+ * final response.
+ * </p>
+ */
+@Slf4j
+public class AgentRunner {
+
+    private final ModelProviderRegistry modelRegistry;
+    private final ToolRegistry toolRegistry;
+    private final int maxTurns;
+
+    public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry) {
+        this(modelRegistry, toolRegistry, 25);
+    }
+
+    public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry, int maxTurns) {
+        this.modelRegistry = modelRegistry;
+        this.toolRegistry = toolRegistry;
+        this.maxTurns = maxTurns;
+    }
+
+    /**
+     * Run a single agent turn (may involve multiple LLM calls with tool use).
+     */
+    public CompletableFuture<AgentResult> run(AgentRunContext context) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return executeLoop(context);
+            } catch (Exception e) {
+                log.error("Agent run failed: {}", e.getMessage(), e);
+                return AgentResult.builder()
+                        .success(false)
+                        .error(e.getMessage())
+                        .build();
+            }
+        });
+    }
+
+    private AgentResult executeLoop(AgentRunContext context) {
+        List<ModelProvider.ChatMessage> messages = new ArrayList<>(context.getMessages());
+        ModelProvider provider = modelRegistry.resolve(context.getModelId());
+
+        if (provider == null) {
+            return AgentResult.builder()
+                    .success(false)
+                    .error("Model provider not found for: " + context.getModelId())
+                    .build();
+        }
+
+        List<AgentEvent> events = new ArrayList<>();
+        int turns = 0;
+
+        while (turns < maxTurns) {
+            turns++;
+
+            // Check cancellation
+            if (context.isCancelled()) {
+                return AgentResult.builder()
+                        .success(false)
+                        .error("Cancelled")
+                        .events(events)
+                        .build();
+            }
+
+            // Call LLM
+            ModelProvider.ChatRequest request = ModelProvider.ChatRequest.builder()
+                    .model(context.getModelId())
+                    .messages(messages)
+                    .maxTokens(context.getMaxTokens())
+                    .temperature(context.getTemperature())
+                    .tools(toolRegistry.toDefinitions())
+                    .systemPrompt(context.getSystemPrompt())
+                    .build();
+
+            ModelProvider.ChatResponse response;
+            try {
+                response = provider.chat(request).join();
+            } catch (Exception e) {
+                return AgentResult.builder()
+                        .success(false)
+                        .error("LLM call failed: " + e.getMessage())
+                        .events(events)
+                        .build();
+            }
+
+            events.add(AgentEvent.builder()
+                    .type("message")
+                    .content(response.getMessage() != null ? response.getMessage().getContent() : null)
+                    .usage(response.getUsage())
+                    .build());
+
+            // Check if there are tool calls
+            if (response.getToolUses() == null || response.getToolUses().isEmpty()) {
+                // No tool calls — final response
+                return AgentResult.builder()
+                        .success(true)
+                        .finalMessage(response.getMessage() != null ? response.getMessage().getContent() : "")
+                        .events(events)
+                        .turns(turns)
+                        .build();
+            }
+
+            // Add assistant message with tool uses
+            messages.add(ModelProvider.ChatMessage.builder()
+                    .role("assistant")
+                    .content(response.getMessage() != null ? response.getMessage().getContent() : "")
+                    .build());
+
+            // Execute each tool call
+            for (ModelProvider.ToolUse toolUse : response.getToolUses()) {
+                events.add(AgentEvent.builder()
+                        .type("tool_start")
+                        .toolName(toolUse.getName())
+                        .toolId(toolUse.getId())
+                        .build());
+
+                AgentTool.ToolResult toolResult = executeTool(toolUse, context);
+
+                events.add(AgentEvent.builder()
+                        .type("tool_end")
+                        .toolName(toolUse.getName())
+                        .toolId(toolUse.getId())
+                        .content(toolResult.isSuccess() ? toolResult.getOutput() : toolResult.getError())
+                        .build());
+
+                // Add tool result as message
+                messages.add(ModelProvider.ChatMessage.builder()
+                        .role("tool")
+                        .content(toolResult.isSuccess() ? toolResult.getOutput() : "Error: " + toolResult.getError())
+                        .toolUseId(toolUse.getId())
+                        .build());
+            }
+        }
+
+        return AgentResult.builder()
+                .success(false)
+                .error("Max turns exceeded (" + maxTurns + ")")
+                .events(events)
+                .turns(turns)
+                .build();
+    }
+
+    private AgentTool.ToolResult executeTool(ModelProvider.ToolUse toolUse, AgentRunContext context) {
+        Optional<AgentTool> tool = toolRegistry.get(toolUse.getName());
+        if (tool.isEmpty()) {
+            return AgentTool.ToolResult.fail("Unknown tool: " + toolUse.getName());
+        }
+
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode params = mapper.valueToTree(toolUse.getInput());
+
+            AgentTool.ToolContext toolCtx = AgentTool.ToolContext.builder()
+                    .parameters(params)
+                    .sessionKey(context.getSessionKey())
+                    .cwd(context.getCwd())
+                    .config(context.getConfig())
+                    .build();
+
+            return tool.get().execute(toolCtx).join();
+        } catch (Exception e) {
+            log.error("Tool {} execution failed: {}", toolUse.getName(), e.getMessage(), e);
+            return AgentTool.ToolResult.fail("Execution error: " + e.getMessage());
+        }
+    }
+
+    // --- Data types ---
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AgentRunContext {
+        private String sessionKey;
+        private String modelId;
+        private String systemPrompt;
+        private List<ModelProvider.ChatMessage> messages;
+        private String cwd;
+        private int maxTokens;
+        private double temperature;
+        private OpenClawConfig config;
+        private volatile boolean cancelled;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AgentResult {
+        private boolean success;
+        private String finalMessage;
+        private String error;
+        private List<AgentEvent> events;
+        private int turns;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AgentEvent {
+        private String type; // "message" | "tool_start" | "tool_end"
+        private String content;
+        private String toolName;
+        private String toolId;
+        private ModelProvider.Usage usage;
+    }
+}

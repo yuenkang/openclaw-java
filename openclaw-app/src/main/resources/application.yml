@@ -1,0 +1,19 @@
+server:
+  port: 3578
+
+spring:
+  application:
+    name: openclaw-java
+
+# OpenClaw configuration
+openclaw:
+  config:
+    path: ${OPENCLAW_CONFIG_PATH:~/.openclaw/config.json}
+  gateway:
+    host: 127.0.0.1
+    port: 3578
+
+logging:
+  level:
+    com.openclaw: DEBUG
+    root: INFO
