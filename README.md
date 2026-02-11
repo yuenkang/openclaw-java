@@ -45,14 +45,26 @@ mvn clean install
 ### 运行
 
 ```bash
-# 可选：设置 API Key
+# 设置 API Key
 export ANTHROPIC_API_KEY=your-key-here
+
+# 可选：自定义 API 地址（代理、自建网关等）
+export ANTHROPIC_BASE_URL=https://your-proxy.example.com/v1
 
 # 启动
 mvn spring-boot:run -pl openclaw-app
 ```
 
 服务启动在 `ws://127.0.0.1:3578/ws`
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `ANTHROPIC_API_KEY` | Anthropic API 密钥 | — |
+| `ANTHROPIC_BASE_URL` | Anthropic API 地址 | `https://api.anthropic.com/v1` |
+| `OPENAI_API_KEY` | OpenAI API 密钥 | — |
+| `OLLAMA_BASE_URL` | Ollama 本地服务地址 | `http://127.0.0.1:11434/v1` |
 
 ### 测试
 

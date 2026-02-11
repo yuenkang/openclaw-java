@@ -132,15 +132,32 @@ public class AnthropicProvider implements ModelProvider {
                 continue; // handled above
 
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("role", msg.getRole());
 
             if ("tool".equals(msg.getRole())) {
+                // Tool results must use role "user" with tool_result content blocks
+                m.put("role", "user");
                 List<Map<String, Object>> content = List.of(Map.of(
                         "type", "tool_result",
                         "tool_use_id", msg.getToolUseId(),
-                        "content", msg.getContent()));
+                        "content", msg.getContent() != null ? msg.getContent() : ""));
+                m.put("content", content);
+            } else if ("assistant".equals(msg.getRole()) && msg.getToolUses() != null && !msg.getToolUses().isEmpty()) {
+                // Assistant messages with tool uses: content is array of text + tool_use blocks
+                m.put("role", "assistant");
+                List<Map<String, Object>> content = new ArrayList<>();
+                if (msg.getContent() != null && !msg.getContent().isEmpty()) {
+                    content.add(Map.of("type", "text", "text", msg.getContent()));
+                }
+                for (ToolUse tu : msg.getToolUses()) {
+                    content.add(Map.of(
+                            "type", "tool_use",
+                            "id", tu.getId(),
+                            "name", tu.getName(),
+                            "input", tu.getInput() != null ? tu.getInput() : Map.of()));
+                }
                 m.put("content", content);
             } else {
+                m.put("role", msg.getRole());
                 m.put("content", msg.getContent());
             }
             messages.add(m);

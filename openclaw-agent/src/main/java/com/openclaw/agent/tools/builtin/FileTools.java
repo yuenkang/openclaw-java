@@ -72,7 +72,7 @@ public class FileTools {
 
             @Override
             public String getDescription() {
-                return "Write content to a file. Creates the file and parent directories if they don't exist.";
+                return "Write content to a file at the specified path. Creates parent directories if needed. The path must be a complete file path including filename (e.g. /tmp/hello.py), not a directory.";
             }
 
             @Override
@@ -80,8 +80,9 @@ public class FileTools {
                 ObjectNode schema = MAPPER.createObjectNode();
                 schema.put("type", "object");
                 ObjectNode props = schema.putObject("properties");
-                props.putObject("path").put("type", "string").put("description", "Absolute file path");
-                props.putObject("content").put("type", "string").put("description", "File content");
+                props.putObject("path").put("type", "string")
+                        .put("description", "Absolute file path including filename, e.g. /home/user/hello.py");
+                props.putObject("content").put("type", "string").put("description", "File content to write");
                 schema.putArray("required").add("path").add("content");
                 return schema;
             }
@@ -93,7 +94,18 @@ public class FileTools {
                     String content = context.getParameters().path("content").asText("");
                     try {
                         Path filePath = Path.of(path);
-                        Files.createDirectories(filePath.getParent());
+                        if (Files.isDirectory(filePath)) {
+                            return ToolResult
+                                    .fail("Cannot write to directory: " + path + ". Please specify a file path.");
+                        }
+                        // Ensure parent directories exist before writing.
+                        // Note: Files.exists() follows symlinks, so /tmp (symlink to /private/tmp on
+                        // macOS)
+                        // is correctly detected as existing. Calling Files.createDirectories() directly
+                        // on a symlink directory would throw FileAlreadyExistsException.
+                        if (filePath.getParent() != null && !Files.exists(filePath.getParent())) {
+                            Files.createDirectories(filePath.getParent());
+                        }
                         Files.writeString(filePath, content, StandardCharsets.UTF_8);
                         return ToolResult.ok("Written " + content.length() + " chars to " + path);
                     } catch (IOException e) {

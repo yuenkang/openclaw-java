@@ -125,6 +125,7 @@ public class AgentRunner {
             messages.add(ModelProvider.ChatMessage.builder()
                     .role("assistant")
                     .content(response.getMessage() != null ? response.getMessage().getContent() : "")
+                    .toolUses(response.getToolUses())
                     .build());
 
             // Execute each tool call
