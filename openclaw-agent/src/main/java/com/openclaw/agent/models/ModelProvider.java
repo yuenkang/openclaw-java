@@ -70,6 +70,8 @@ public interface ModelProvider {
         private String role;
         private String content;
         private String toolUseId;
+        /** Tool uses included in assistant messages (for multi-turn tool calling) */
+        private List<ToolUse> toolUses;
     }
 
     @Data

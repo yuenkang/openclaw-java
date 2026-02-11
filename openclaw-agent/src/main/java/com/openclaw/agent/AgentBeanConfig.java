@@ -69,7 +69,14 @@ public class AgentBeanConfig {
     private void registerProvidersFromEnv(ModelProviderRegistry registry) {
         String anthropicKey = System.getenv("ANTHROPIC_API_KEY");
         if (anthropicKey != null && !anthropicKey.isBlank()) {
-            registry.register(new AnthropicProvider(anthropicKey));
+            String anthropicBaseUrl = System.getenv("ANTHROPIC_BASE_URL");
+            if (anthropicBaseUrl != null && !anthropicBaseUrl.isBlank()) {
+                registry.register(new AnthropicProvider(anthropicKey, anthropicBaseUrl));
+                log.info("Anthropic provider registered with custom base URL: {}", anthropicBaseUrl);
+            } else {
+                registry.register(new AnthropicProvider(anthropicKey));
+                log.info("Anthropic provider registered with default base URL");
+            }
         }
 
         String openaiKey = System.getenv("OPENAI_API_KEY");
