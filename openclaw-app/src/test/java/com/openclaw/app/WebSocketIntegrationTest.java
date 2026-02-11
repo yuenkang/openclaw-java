@@ -137,4 +137,60 @@ class WebSocketIntegrationTest {
         assertNotNull(json.get("error"));
         assertEquals(-32601, json.get("error").get("code").asInt());
     }
+
+    @Test
+    @org.junit.jupiter.api.Order(6)
+    void agentRun_missingModelId_returnsError() throws Exception {
+        String req = """
+                {"jsonrpc":"2.0","id":6,"method":"agent.run","params":{"messages":[{"role":"user","content":"hello"}]}}
+                """;
+        session.sendMessage(new TextMessage(req));
+
+        String response = messages.poll(5, TimeUnit.SECONDS);
+        assertNotNull(response, "No response received");
+
+        JsonNode json = mapper.readTree(response);
+        assertEquals(6, json.get("id").asInt());
+        assertNotNull(json.get("error"));
+        assertTrue(json.get("error").get("message").asText().contains("modelId"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(7)
+    void agentMessage_missingMessage_returnsError() throws Exception {
+        String req = """
+                {"jsonrpc":"2.0","id":7,"method":"agent.message","params":{}}
+                """;
+        session.sendMessage(new TextMessage(req));
+
+        String response = messages.poll(5, TimeUnit.SECONDS);
+        assertNotNull(response, "No response received");
+
+        JsonNode json = mapper.readTree(response);
+        assertEquals(7, json.get("id").asInt());
+        assertNotNull(json.get("error"));
+        assertTrue(json.get("error").get("message").asText().contains("message"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(8)
+    void agentRun_noProvider_returnsAgentError() throws Exception {
+        // Uses a model that has no provider configured — agent returns success=false
+        // with error
+        String req = """
+                {"jsonrpc":"2.0","id":8,"method":"agent.run","params":{"modelId":"fake/model","messages":[{"role":"user","content":"hi"}]}}
+                """;
+        session.sendMessage(new TextMessage(req));
+
+        String response = messages.poll(10, TimeUnit.SECONDS);
+        assertNotNull(response, "No response received");
+
+        JsonNode json = mapper.readTree(response);
+        assertEquals(8, json.get("id").asInt());
+        // Agent returns a result with success=false
+        JsonNode result = json.get("result");
+        assertNotNull(result, "Expected result from agent.run");
+        assertFalse(result.get("success").asBoolean());
+        assertTrue(result.get("error").asText().contains("not found"));
+    }
 }
