@@ -134,7 +134,7 @@ public class AgentRunner {
                         .build();
             }
 
-            // Call LLM
+            // Call LLM with streaming
             ModelProvider.ChatRequest request = ModelProvider.ChatRequest.builder()
                     .model(context.getModelId())
                     .messages(messages)
@@ -142,11 +142,22 @@ public class AgentRunner {
                     .temperature(context.getTemperature())
                     .tools(toolRegistry.toDefinitions())
                     .systemPrompt(context.getSystemPrompt())
+                    .stream(true)
                     .build();
+
+            // Stream listener bridges ModelProvider.StreamListener → AgentEventListener
+            ModelProvider.StreamListener streamListener = new ModelProvider.StreamListener() {
+                @Override
+                public void onText(String delta) {
+                    if (context.getListener() != null) {
+                        context.getListener().onDelta(delta);
+                    }
+                }
+            };
 
             ModelProvider.ChatResponse response;
             try {
-                response = provider.chat(request).join();
+                response = provider.chatStream(request, streamListener).join();
             } catch (Exception e) {
                 return AgentResult.builder()
                         .success(false)
@@ -161,11 +172,6 @@ public class AgentRunner {
                     .content(messageContent)
                     .usage(response.getUsage())
                     .build());
-
-            // Stream text delta to listener
-            if (messageContent != null && !messageContent.isEmpty() && context.getListener() != null) {
-                context.getListener().onDelta(messageContent);
-            }
 
             // Check if there are tool calls
             if (response.getToolUses() == null || response.getToolUses().isEmpty()) {
