@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-02-12 — Phase 4: TS↔Java RPC 方法差距补齐
+
+### Added
+- **MiscMethodRegistrar** — 注册 17 个方法：`talk.mode`、`voicewake.get/set`、`skills.install/update`（简化）+ 12 个 stub（send/poll/tts.*/browser.request/web.login.*/update.run）
+- **AgentTimestampService** — 消息时间戳注入（对应 TS agent-timestamp.ts）
+- **AgentJobTracker** — Agent run 生命周期追踪 + `waitForJob` API（对应 TS agent-job.ts）
+
+### Modified
+- **GatewayBeanConfig** — 注册 AgentTimestampService、AgentJobTracker Bean
+
+---
+
 ## 2026-02-12 — Phase 3E: Node/Device Management
 
 ### Added
