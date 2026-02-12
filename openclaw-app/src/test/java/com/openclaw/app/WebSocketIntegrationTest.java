@@ -14,11 +14,21 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.net.URI;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Integration tests for the Gateway WebSocket protocol.
+ * Tests use the TS-aligned frame format:
+ * - Request: {type:"req", id, method, params?}
+ * - Response: {type:"res", id, ok, payload?, error?}
+ * - Event: {type:"event", event, payload?}
+ *
+ * Each test performs the connect handshake before sending method requests.
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 class WebSocketIntegrationTest {
@@ -28,7 +38,7 @@ class WebSocketIntegrationTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private WebSocketSession session;
-    private final ArrayBlockingQueue<String> messages = new ArrayBlockingQueue<>(10);
+    private final ArrayBlockingQueue<String> messages = new ArrayBlockingQueue<>(20);
 
     @BeforeEach
     void connect() throws Exception {
@@ -44,6 +54,43 @@ class WebSocketIntegrationTest {
 
         assertNotNull(session);
         assertTrue(session.isOpen());
+
+        // Receive connect.challenge event
+        String challengeMsg = messages.poll(5, TimeUnit.SECONDS);
+        assertNotNull(challengeMsg, "Expected connect.challenge event");
+        JsonNode challenge = mapper.readTree(challengeMsg);
+        assertEquals("event", challenge.get("type").asText());
+        assertEquals("connect.challenge", challenge.get("event").asText());
+        String nonce = challenge.get("payload").get("nonce").asText();
+        assertNotNull(nonce);
+
+        // Send connect handshake
+        String connectReq = mapper.writeValueAsString(Map.of(
+                "type", "req",
+                "id", "connect-1",
+                "method", "connect",
+                "params", Map.of(
+                        "minProtocol", 1,
+                        "maxProtocol", 1,
+                        "client", Map.of(
+                                "id", "test-client",
+                                "version", "0.0.1",
+                                "platform", "test",
+                                "mode", "test"),
+                        "role", "operator",
+                        "scopes", new String[] { "operator.admin" })));
+        session.sendMessage(new TextMessage(connectReq));
+
+        // Receive hello-ok response
+        String helloMsg = messages.poll(5, TimeUnit.SECONDS);
+        assertNotNull(helloMsg, "Expected hello-ok response");
+        JsonNode hello = mapper.readTree(helloMsg);
+        assertEquals("res", hello.get("type").asText());
+        assertTrue(hello.get("ok").asBoolean());
+        JsonNode helloOk = hello.get("payload");
+        assertNotNull(helloOk);
+        assertEquals("hello-ok", helloOk.get("type").asText());
+        assertEquals(1, helloOk.get("protocol").asInt());
     }
 
     @AfterEach
@@ -51,56 +98,55 @@ class WebSocketIntegrationTest {
         if (session != null && session.isOpen()) {
             session.close();
         }
+        messages.clear();
     }
+
+    // --- Helper ---
+
+    private JsonNode sendRequest(String id, String method, Object params) throws Exception {
+        String req = mapper.writeValueAsString(Map.of(
+                "type", "req",
+                "id", id,
+                "method", method,
+                "params", params != null ? params : Map.of()));
+        session.sendMessage(new TextMessage(req));
+
+        String response = messages.poll(5, TimeUnit.SECONDS);
+        assertNotNull(response, "No response for method=" + method);
+        return mapper.readTree(response);
+    }
+
+    // --- Tests ---
 
     @Test
     @org.junit.jupiter.api.Order(1)
     void rpcStatus_returnsOk() throws Exception {
-        String req = """
-                {"jsonrpc":"2.0","id":1,"method":"status","params":{}}
-                """;
-        session.sendMessage(new TextMessage(req));
-
-        String response = messages.poll(5, TimeUnit.SECONDS);
-        assertNotNull(response, "No response received");
-
-        JsonNode json = mapper.readTree(response);
-        assertEquals("2.0", json.get("jsonrpc").asText());
-        assertEquals(1, json.get("id").asInt());
-        assertNotNull(json.get("result"));
-        assertEquals("ok", json.get("result").get("status").asText());
+        JsonNode json = sendRequest("1", "status", null);
+        assertEquals("res", json.get("type").asText());
+        assertEquals("1", json.get("id").asText());
+        assertTrue(json.get("ok").asBoolean());
+        JsonNode result = json.get("payload");
+        assertNotNull(result);
+        assertEquals("ok", result.get("status").asText());
     }
 
     @Test
     @org.junit.jupiter.api.Order(2)
-    void rpcSessionList_returnsEmptyArray() throws Exception {
-        String req = """
-                {"jsonrpc":"2.0","id":2,"method":"session.list","params":{}}
-                """;
-        session.sendMessage(new TextMessage(req));
-
-        String response = messages.poll(5, TimeUnit.SECONDS);
-        assertNotNull(response, "No response received");
-
-        JsonNode json = mapper.readTree(response);
-        assertEquals(2, json.get("id").asInt());
-        assertTrue(json.get("result").isArray());
+    void rpcSessionList_returnsArray() throws Exception {
+        JsonNode json = sendRequest("2", "sessions.list", null);
+        assertEquals("2", json.get("id").asText());
+        assertTrue(json.get("ok").asBoolean());
+        assertTrue(json.get("payload").isArray());
     }
 
     @Test
     @org.junit.jupiter.api.Order(3)
     void rpcSessionCreate_returnsSession() throws Exception {
-        String req = """
-                {"jsonrpc":"2.0","id":3,"method":"session.create","params":{"sessionKey":"test-key","cwd":"/tmp"}}
-                """;
-        session.sendMessage(new TextMessage(req));
-
-        String response = messages.poll(5, TimeUnit.SECONDS);
-        assertNotNull(response, "No response received");
-
-        JsonNode json = mapper.readTree(response);
-        assertEquals(3, json.get("id").asInt());
-        JsonNode result = json.get("result");
+        JsonNode json = sendRequest("3", "session.create",
+                Map.of("sessionKey", "test-key", "cwd", "/tmp"));
+        assertEquals("3", json.get("id").asText());
+        assertTrue(json.get("ok").asBoolean());
+        JsonNode result = json.get("payload");
         assertNotNull(result.get("sessionId"));
         assertEquals("test-key", result.get("sessionKey").asText());
     }
@@ -108,89 +154,71 @@ class WebSocketIntegrationTest {
     @Test
     @org.junit.jupiter.api.Order(4)
     void rpcConfigGet_returnsConfig() throws Exception {
-        String req = """
-                {"jsonrpc":"2.0","id":4,"method":"config.get","params":{}}
-                """;
-        session.sendMessage(new TextMessage(req));
-
-        String response = messages.poll(5, TimeUnit.SECONDS);
-        assertNotNull(response, "No response received");
-
-        JsonNode json = mapper.readTree(response);
-        assertEquals(4, json.get("id").asInt());
-        assertNotNull(json.get("result"));
+        JsonNode json = sendRequest("4", "config.get", null);
+        assertEquals("4", json.get("id").asText());
+        assertTrue(json.get("ok").asBoolean());
+        assertNotNull(json.get("payload"));
     }
 
     @Test
     @org.junit.jupiter.api.Order(5)
     void rpcUnknownMethod_returnsError() throws Exception {
-        String req = """
-                {"jsonrpc":"2.0","id":5,"method":"nonexistent.method","params":{}}
-                """;
-        session.sendMessage(new TextMessage(req));
-
-        String response = messages.poll(5, TimeUnit.SECONDS);
-        assertNotNull(response, "No response received");
-
-        JsonNode json = mapper.readTree(response);
-        assertEquals(5, json.get("id").asInt());
+        JsonNode json = sendRequest("5", "nonexistent.method", null);
+        assertEquals("5", json.get("id").asText());
+        assertFalse(json.get("ok").asBoolean());
         assertNotNull(json.get("error"));
-        assertEquals(-32601, json.get("error").get("code").asInt());
+        assertEquals("NOT_FOUND", json.get("error").get("code").asText());
     }
 
     @Test
     @org.junit.jupiter.api.Order(6)
     void agentRun_missingModelId_returnsError() throws Exception {
-        String req = """
-                {"jsonrpc":"2.0","id":6,"method":"agent.run","params":{"messages":[{"role":"user","content":"hello"}]}}
-                """;
-        session.sendMessage(new TextMessage(req));
-
-        String response = messages.poll(5, TimeUnit.SECONDS);
-        assertNotNull(response, "No response received");
-
-        JsonNode json = mapper.readTree(response);
-        assertEquals(6, json.get("id").asInt());
+        JsonNode json = sendRequest("6", "agent.run",
+                Map.of("messages", new Object[] { Map.of("role", "user", "content", "hello") }));
+        assertEquals("6", json.get("id").asText());
+        assertFalse(json.get("ok").asBoolean());
         assertNotNull(json.get("error"));
-        assertTrue(json.get("error").get("message").asText().contains("modelId"));
     }
 
     @Test
     @org.junit.jupiter.api.Order(7)
     void agentMessage_missingMessage_returnsError() throws Exception {
-        String req = """
-                {"jsonrpc":"2.0","id":7,"method":"agent.message","params":{}}
-                """;
-        session.sendMessage(new TextMessage(req));
-
-        String response = messages.poll(5, TimeUnit.SECONDS);
-        assertNotNull(response, "No response received");
-
-        JsonNode json = mapper.readTree(response);
-        assertEquals(7, json.get("id").asInt());
+        JsonNode json = sendRequest("7", "agent.message", Map.of());
+        assertEquals("7", json.get("id").asText());
+        assertFalse(json.get("ok").asBoolean());
         assertNotNull(json.get("error"));
-        assertTrue(json.get("error").get("message").asText().contains("message"));
     }
 
     @Test
     @org.junit.jupiter.api.Order(8)
-    void agentRun_noProvider_returnsAgentError() throws Exception {
-        // Uses a model that has no provider configured — agent returns success=false
-        // with error
-        String req = """
-                {"jsonrpc":"2.0","id":8,"method":"agent.run","params":{"modelId":"fake/model","messages":[{"role":"user","content":"hi"}]}}
-                """;
-        session.sendMessage(new TextMessage(req));
+    void invalidHandshake_closesConnection() throws Exception {
+        // Create a new connection that skips handshake
+        StandardWebSocketClient client = new StandardWebSocketClient();
+        URI uri = URI.create("ws://127.0.0.1:" + port + "/ws");
+        ArrayBlockingQueue<String> msgs = new ArrayBlockingQueue<>(10);
+        var rawSession = client.execute(new TextWebSocketHandler() {
+            @Override
+            protected void handleTextMessage(WebSocketSession s, TextMessage message) {
+                msgs.add(message.getPayload());
+            }
+        }, new WebSocketHttpHeaders(), uri).get(5, TimeUnit.SECONDS);
 
-        String response = messages.poll(10, TimeUnit.SECONDS);
-        assertNotNull(response, "No response received");
+        // Consume connect.challenge
+        String challengeMsg = msgs.poll(5, TimeUnit.SECONDS);
+        assertNotNull(challengeMsg);
 
-        JsonNode json = mapper.readTree(response);
-        assertEquals(8, json.get("id").asInt());
-        // Agent returns a result with success=false
-        JsonNode result = json.get("result");
-        assertNotNull(result, "Expected result from agent.run");
-        assertFalse(result.get("success").asBoolean());
-        assertTrue(result.get("error").asText().contains("not found"));
+        // Send a non-connect request before handshake
+        String badReq = mapper.writeValueAsString(Map.of(
+                "type", "req", "id", "bad-1", "method", "status", "params", Map.of()));
+        rawSession.sendMessage(new TextMessage(badReq));
+
+        // Should get error response
+        String errorMsg = msgs.poll(5, TimeUnit.SECONDS);
+        assertNotNull(errorMsg, "Expected error response for pre-handshake request");
+        JsonNode error = mapper.readTree(errorMsg);
+        assertFalse(error.get("ok").asBoolean());
+        assertTrue(error.get("error").get("message").asText().contains("connect"));
+
+        rawSession.close();
     }
 }

@@ -2,6 +2,7 @@ package com.openclaw.agent.runtime;
 
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
+import com.openclaw.agent.prompt.SystemPromptBuilder;
 import com.openclaw.agent.tools.AgentTool;
 import com.openclaw.agent.tools.ToolRegistry;
 import com.openclaw.common.config.OpenClawConfig;
@@ -25,6 +26,45 @@ import java.util.concurrent.CompletableFuture;
  */
 @Slf4j
 public class AgentRunner {
+
+    /**
+     * Listener for streaming agent execution events.
+     * Allows real-time notification of LLM output and tool execution.
+     */
+    public interface AgentEventListener {
+        /** Called when the LLM produces text output. */
+        void onDelta(String text);
+
+        /** Called when a tool execution starts. */
+        void onToolStart(String toolName, String toolId);
+
+        /** Called when a tool execution completes. */
+        void onToolEnd(String toolName, String toolId, String result, boolean success);
+
+        /** Called when the agent run completes successfully. */
+        void onComplete(String finalMessage);
+
+        /** Called when the agent run fails. */
+        void onError(String error);
+    }
+
+    /** No-op listener for when streaming is not needed. */
+    public static final AgentEventListener NOOP_LISTENER = new AgentEventListener() {
+        public void onDelta(String text) {
+        }
+
+        public void onToolStart(String toolName, String toolId) {
+        }
+
+        public void onToolEnd(String toolName, String toolId, String result, boolean success) {
+        }
+
+        public void onComplete(String finalMessage) {
+        }
+
+        public void onError(String error) {
+        }
+    };
 
     private final ModelProviderRegistry modelRegistry;
     private final ToolRegistry toolRegistry;
@@ -68,6 +108,17 @@ public class AgentRunner {
                     .build();
         }
 
+        // Auto-build system prompt if not provided
+        if (context.getSystemPrompt() == null || context.getSystemPrompt().isBlank()) {
+            String autoPrompt = SystemPromptBuilder.build(
+                    SystemPromptBuilder.SystemPromptParams.builder()
+                            .modelId(context.getModelId())
+                            .workspaceDir(context.getCwd())
+                            .toolNames(new ArrayList<>(toolRegistry.getToolNames()))
+                            .build());
+            context.setSystemPrompt(autoPrompt);
+        }
+
         List<AgentEvent> events = new ArrayList<>();
         int turns = 0;
 
@@ -104,11 +155,17 @@ public class AgentRunner {
                         .build();
             }
 
+            String messageContent = response.getMessage() != null ? response.getMessage().getContent() : null;
             events.add(AgentEvent.builder()
                     .type("message")
-                    .content(response.getMessage() != null ? response.getMessage().getContent() : null)
+                    .content(messageContent)
                     .usage(response.getUsage())
                     .build());
+
+            // Stream text delta to listener
+            if (messageContent != null && !messageContent.isEmpty() && context.getListener() != null) {
+                context.getListener().onDelta(messageContent);
+            }
 
             // Check if there are tool calls
             if (response.getToolUses() == null || response.getToolUses().isEmpty()) {
@@ -135,6 +192,9 @@ public class AgentRunner {
                         .toolName(toolUse.getName())
                         .toolId(toolUse.getId())
                         .build());
+                if (context.getListener() != null) {
+                    context.getListener().onToolStart(toolUse.getName(), toolUse.getId());
+                }
 
                 AgentTool.ToolResult toolResult = executeTool(toolUse, context);
 
@@ -144,6 +204,11 @@ public class AgentRunner {
                         .toolId(toolUse.getId())
                         .content(toolResult.isSuccess() ? toolResult.getOutput() : toolResult.getError())
                         .build());
+                if (context.getListener() != null) {
+                    context.getListener().onToolEnd(toolUse.getName(), toolUse.getId(),
+                            toolResult.isSuccess() ? toolResult.getOutput() : toolResult.getError(),
+                            toolResult.isSuccess());
+                }
 
                 // Add tool result as message
                 messages.add(ModelProvider.ChatMessage.builder()
@@ -202,6 +267,8 @@ public class AgentRunner {
         private double temperature;
         private OpenClawConfig config;
         private volatile boolean cancelled;
+        @Builder.Default
+        private AgentEventListener listener = NOOP_LISTENER;
     }
 
     @Data

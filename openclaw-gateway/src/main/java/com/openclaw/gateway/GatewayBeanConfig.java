@@ -1,6 +1,7 @@
 package com.openclaw.gateway;
 
 import com.openclaw.common.config.ConfigService;
+import com.openclaw.gateway.auth.AuthService;
 import com.openclaw.gateway.routing.RouteResolver;
 import com.openclaw.gateway.session.SessionStore;
 import com.openclaw.gateway.websocket.GatewayMethodRouter;
@@ -16,12 +17,16 @@ import java.nio.file.Path;
 @Configuration
 public class GatewayBeanConfig {
 
-    @Value("${openclaw.config.path:#{systemProperties['user.home']}/.openclaw/config.json}")
+    @Value("${openclaw.config.path:~/.openclaw/config.json}")
     private String configPath;
 
     @Bean
     public ConfigService configService() {
-        return new ConfigService(Path.of(configPath));
+        String resolvedPath = configPath;
+        if (resolvedPath.startsWith("~")) {
+            resolvedPath = System.getProperty("user.home") + resolvedPath.substring(1);
+        }
+        return new ConfigService(Path.of(resolvedPath));
     }
 
     @Bean
@@ -32,6 +37,11 @@ public class GatewayBeanConfig {
     @Bean
     public GatewayMethodRouter gatewayMethodRouter() {
         return new GatewayMethodRouter();
+    }
+
+    @Bean
+    public AuthService authService(ConfigService configService) {
+        return new AuthService(configService);
     }
 
     @Bean

@@ -36,6 +36,7 @@ public class AgentBeanConfig {
         registry.register(FileTools.readFile());
         registry.register(FileTools.writeFile());
         registry.register(FileTools.listDir());
+        registry.register(FileTools.grepSearch());
 
         log.info("Registered {} built-in tools", registry.size());
         return registry;

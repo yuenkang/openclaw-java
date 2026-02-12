@@ -27,7 +27,9 @@ class ConfigServiceTest {
                 {
                   "gateway": {
                     "port": 4000,
-                    "password": "test-pass"
+                    "auth": {
+                      "password": "test-pass"
+                    }
                   },
                   "logging": {
                     "level": "debug"
@@ -42,7 +44,8 @@ class ConfigServiceTest {
         assertNotNull(config);
         assertNotNull(config.getGateway());
         assertEquals(4000, config.getGateway().getPort());
-        assertEquals("test-pass", config.getGateway().getPassword());
+        assertNotNull(config.getGateway().getAuth());
+        assertEquals("test-pass", config.getGateway().getAuth().getPassword());
     }
 
     @Test

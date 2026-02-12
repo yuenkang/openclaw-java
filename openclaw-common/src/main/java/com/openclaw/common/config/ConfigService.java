@@ -33,6 +33,12 @@ public class ConfigService {
     }
 
     public ConfigService(Path configPath, Duration cacheTtl) {
+        // Expand ~ to user home directory
+        String pathStr = configPath.toString();
+        if (pathStr.startsWith("~")) {
+            pathStr = System.getProperty("user.home") + pathStr.substring(1);
+            configPath = Path.of(pathStr);
+        }
         this.configPath = configPath;
         this.objectMapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);

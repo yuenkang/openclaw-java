@@ -19,8 +19,29 @@ public class AcpSession {
     private String sessionKey;
     private String cwd;
     private long createdAt;
+    private long updatedAt;
     private String activeRunId;
     private volatile boolean cancelled;
+
+    // Session metadata (aligned with TS SessionEntry)
+    private String kind; // "direct" | "group" | "global"
+    private String label;
+    private String channel;
+    private String agentId;
+
+    // Model configuration
+    private String model;
+    private String modelProvider;
+    private Integer contextTokens;
+    private String thinkingLevel;
+
+    // Token usage
+    private long inputTokens;
+    private long outputTokens;
+    private long totalTokens;
+
+    // File path for JSONL transcript
+    private String sessionFile;
 
     /**
      * Mark this session's active run as cancelled.
