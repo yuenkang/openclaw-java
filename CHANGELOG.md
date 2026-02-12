@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 16 — Skills 子系统
+
+### Modified
+- `SkillTypes` — 补全 6 个缺失类型 (SkillInstallSpec/CommandSpec/DispatchSpec/InstallPreferences/EligibilityContext + EXTRA source)
+- `SkillFrontmatterParser` — 适配 SkillMetadata 新增 `install` 参数
+- `SkillLoader` — 适配 SkillSnapshot 新增 `resolvedSkills` 参数
+- `OpenClawConfig` — 新增 `SkillsConfig` / `SkillLoadConfig` 嵌套类 + `skills` / `plugins` 字段
+
+### Added (skills/ 包, 6 new files, total 9 files, 1768 lines)
+- `SkillConfigResolver` — 配置路径解析 + 资格检查 (OS/bins/env/config) + 二进制检测 + 内置白名单
+- `SkillEnvOverrides` — 技能环境变量覆盖 + 可逆 Runnable + apiKey→primaryEnv 映射
+- `SkillBundledDir` — 内置技能目录解析 (env→jar→classpath→上溯) + context 加载
+- `SkillSerializer` — 按 key 序列化异步任务 (CompletableFuture 队列)
+- `SkillRefresh` — 文件监视器 (WatchService) + 快照版本管理 + debounce + 变更通知
+- `SkillPluginResolver` — 插件技能目录解析 (workspace+global manifest 扫描 + enabled 检查)
+
 ## Phase 15 — Sandbox 沙箱子系统
 
 ### Added (sandbox/ 包, 12 files, 1797 lines)
