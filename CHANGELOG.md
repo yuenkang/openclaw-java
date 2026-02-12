@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-02-12 — Phase 5D: Hooks 事件系统 + Skills 技能加载
+
+### Added
+- **InternalHookRegistry** — 事件驱动 hook 注册/触发（eventKey→handler[]，type/type:action 双层匹配，错误隔离）
+- **SkillTypes** — Skill/SkillEntry/SkillMetadata/SkillInvocationPolicy/SkillSnapshot 类型定义
+- **SkillFrontmatterParser** — YAML frontmatter 解析 + OpenClaw metadata JSON 提取 + invocation policy
+- **SkillLoader** — 多源技能发现（workspace/bundled/managed）+ OS 过滤 + prompt 构建
+
 ## 2026-02-12 — Phase 5C: Session 基础设施层
 
 ### Added
