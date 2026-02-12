@@ -157,4 +157,112 @@ public class FileTools {
             }
         };
     }
+
+    /** Search file contents for a pattern (grep-like). */
+    public static AgentTool grepSearch() {
+        return new AgentTool() {
+            @Override
+            public String getName() {
+                return "grep_search";
+            }
+
+            @Override
+            public String getDescription() {
+                return "Search for a text pattern in files under the given directory. " +
+                        "Returns matching lines with file paths and line numbers. " +
+                        "Use include glob to filter by file extension (e.g. \"*.java\").";
+            }
+
+            @Override
+            public JsonNode getParameterSchema() {
+                ObjectNode schema = MAPPER.createObjectNode();
+                schema.put("type", "object");
+                ObjectNode props = schema.putObject("properties");
+                props.putObject("query").put("type", "string")
+                        .put("description", "Search query (plain text or regex)");
+                props.putObject("path").put("type", "string")
+                        .put("description", "Directory to search in");
+                props.putObject("include").put("type", "string")
+                        .put("description", "Optional file glob pattern, e.g. *.java");
+                schema.putArray("required").add("query").add("path");
+                return schema;
+            }
+
+            @Override
+            public CompletableFuture<ToolResult> execute(ToolContext context) {
+                return CompletableFuture.supplyAsync(() -> {
+                    String query = context.getParameters().path("query").asText("");
+                    String searchPath = context.getParameters().path("path").asText("");
+                    String include = context.getParameters().path("include").asText("");
+
+                    if (query.isBlank() || searchPath.isBlank()) {
+                        return ToolResult.fail("query and path are required");
+                    }
+
+                    Path dir = Path.of(searchPath);
+                    if (!Files.exists(dir)) {
+                        return ToolResult.fail("Path does not exist: " + searchPath);
+                    }
+
+                    // Build glob matcher if include is specified
+                    PathMatcher globMatcher = null;
+                    if (!include.isBlank()) {
+                        globMatcher = FileSystems.getDefault()
+                                .getPathMatcher("glob:" + include);
+                    }
+
+                    StringBuilder sb = new StringBuilder();
+                    int matchCount = 0;
+                    final int MAX_MATCHES = 50;
+
+                    try {
+                        PathMatcher finalGlobMatcher = globMatcher;
+                        try (Stream<Path> walk = Files.walk(dir, 10)) {
+                            var files = walk
+                                    .filter(Files::isRegularFile)
+                                    .filter(p -> {
+                                        if (finalGlobMatcher != null) {
+                                            return finalGlobMatcher.matches(p.getFileName());
+                                        }
+                                        return true;
+                                    })
+                                    .sorted()
+                                    .toList();
+
+                            for (Path file : files) {
+                                if (matchCount >= MAX_MATCHES)
+                                    break;
+                                try {
+                                    var lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+                                    for (int i = 0; i < lines.size(); i++) {
+                                        if (matchCount >= MAX_MATCHES)
+                                            break;
+                                        if (lines.get(i).contains(query)) {
+                                            sb.append(file).append(":")
+                                                    .append(i + 1).append(": ")
+                                                    .append(lines.get(i).strip())
+                                                    .append("\n");
+                                            matchCount++;
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    // Skip binary / unreadable files
+                                }
+                            }
+                        }
+                    } catch (IOException e) {
+                        return ToolResult.fail("Search failed: " + e.getMessage());
+                    }
+
+                    if (matchCount == 0) {
+                        return ToolResult.ok("No matches found for: " + query);
+                    }
+                    if (matchCount >= MAX_MATCHES) {
+                        sb.append("\n... (capped at ").append(MAX_MATCHES).append(" matches)");
+                    }
+                    return ToolResult.ok(sb.toString());
+                });
+            }
+        };
+    }
 }

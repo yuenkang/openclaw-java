@@ -123,6 +123,20 @@ public class SessionStore {
     }
 
     /**
+     * Update a session atomically using the provided consumer.
+     */
+    public boolean updateSession(String sessionId, java.util.function.Consumer<AcpSession> updater) {
+        AcpSession session = sessions.get(sessionId);
+        if (session == null) {
+            return false;
+        }
+        updater.accept(session);
+        session.setUpdatedAt(System.currentTimeMillis());
+        log.debug("Session updated: {}", sessionId);
+        return true;
+    }
+
+    /**
      * Returns the total number of sessions.
      */
     public int size() {

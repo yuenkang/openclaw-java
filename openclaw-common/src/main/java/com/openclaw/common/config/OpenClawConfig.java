@@ -88,6 +88,7 @@ public class OpenClawConfig {
         private String id;
         private String name;
         private String model;
+        private String description;
         private String systemPrompt;
         private SandboxConfig sandbox;
     }
@@ -114,7 +115,23 @@ public class OpenClawConfig {
     public static class GatewayConfig {
         private int port = 3578;
         private String host = "127.0.0.1";
+        /** Authentication settings (corresponds to TS gateway.auth). */
+        private GatewayAuthConfig auth;
+        /** IPs of trusted reverse proxies for X-Forwarded-For resolution. */
+        private List<String> trustedProxies;
+    }
+
+    /**
+     * Authentication config for Gateway connections.
+     * Corresponds to TS GatewayAuthConfig.
+     */
+    @Data
+    public static class GatewayAuthConfig {
+        /** "token" | "password" — defaults to "token" when token is set. */
+        private String mode;
+        /** Shared token for token mode. */
         private String token;
+        /** Shared password for password mode. */
         private String password;
     }
 
