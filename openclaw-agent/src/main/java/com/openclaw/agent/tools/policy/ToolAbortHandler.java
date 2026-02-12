@@ -56,6 +56,12 @@ public final class ToolAbortHandler {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new AbortException("Tool " + toolName + " was aborted");
+        } catch (AbortException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Tool " + toolName + " failed: " + e.getMessage(), e);
         }
     }
 

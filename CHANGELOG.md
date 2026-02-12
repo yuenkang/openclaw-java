@@ -1,6 +1,22 @@
 # Changelog
 
+## Phase 12 — Auth Profiles 子系统
+
+### Added (auth/ 包, 13 files, 1667 lines)
+- `AuthProfileTypes` — credential 类型 (api_key/token/oauth) + usage stats + store 数据结构
+- `AuthProfileConstants` / `AuthProfilePaths` — 常量 + 路径解析
+- `AuthProfileStoreManager` — store CRUD + 文件锁 + 合并 + legacy 迁移
+- `AuthProfileOrder` — round-robin 排序 + cooldown + type 优先级
+- `AuthProfileProfiles` — profile CRUD + provider 过滤 + order 管理
+- `AuthProfileUsage` — 成功/失败追踪 + 指数退避 + billing disable
+- `AuthProfileOAuth` — credential 解析 + token 刷新 + 主 agent fallback
+- `AuthProfileRepair` / `AuthProfileDoctor` — 诊断 + legacy 迁移
+- `AuthProfileDisplay` — 人类可读 label
+- `AuthProfileSessionOverride` — session 级 auto-rotation
+- `AuthProfileExternalSync` — Qwen/MiniMax CLI 同步
+
 ## Phase 11 — 缺失功能模块
+
 
 ### Added
 - `AgentDefaults` — 默认 provider/model/context-tokens 常量
