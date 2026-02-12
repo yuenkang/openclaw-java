@@ -68,4 +68,11 @@ public class GatewayBeanConfig {
     public EventBroadcaster eventBroadcaster(ObjectMapper objectMapper) {
         return new EventBroadcaster(objectMapper);
     }
+
+    @Bean
+    public com.openclaw.gateway.cron.CronService cronService() {
+        String home = System.getProperty("user.home");
+        return new com.openclaw.gateway.cron.CronService(
+                java.nio.file.Path.of(home, ".openclaw", "cron"));
+    }
 }
