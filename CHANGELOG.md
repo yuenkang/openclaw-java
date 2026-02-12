@@ -1,5 +1,23 @@
 # Changelog
 
+## Phase 17 — agents/ 剩余子模块 (pi-extensions, schema, cli-runner)
+
+### Added (extensions/ 包, 7 new files)
+- `ContextPruningSettings` — 上下文裁剪配置类型 + 有效设置解析器（TTL/比率/工具匹配）
+- `ContextPruningRuntime` — WeakHashMap 会话级运行时注册表
+- `ContextPruningTools` — allow/deny glob 模式编译 + 工具可裁剪谓词
+- `ContextPruner` — 软裁剪(head+tail)+硬清除两阶段裁剪器
+- `ContextPruningExtension` — context 事件入口（TTL 检查 → 裁剪委派）
+- `CompactionSafeguardRuntime` — 压缩保障运行时注册表
+- `CompactionSafeguard` — 工具失败提取 + 文件操作摘要 + 回退汇总
+
+### Added (schema/ 包, 2 new files)
+- `GeminiSchemaCleanser` — JSON Schema 清洗（移除不支持关键字/$ref 解析/anyOf 扁平化/null 剥离）
+- `SchemaEnumUtils` — 安全 string-enum schema 构建器（避免 anyOf 被 provider 拒绝）
+
+### Added (runtime/ 包, 1 new file)
+- `CliRunnerHelpers` — CLI 后端管理（进程清理/JSON+JSONL 解析/会话 ID/参数构建/图片写入）
+
 ## Phase 16 — Skills 子系统
 
 ### Modified
