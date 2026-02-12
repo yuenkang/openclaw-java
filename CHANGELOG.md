@@ -1,5 +1,40 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 2: reply/ (10 Java files)
+
+### Added (autoreply/reply/ 包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `InboundText.java` | `inbound-text.ts` | 18 |
+| `ConfigValue.java` | `config-value.ts` | 82 |
+| `ReplyInline.java` | `reply-inline.ts` | 65 |
+| `ReplyReference.java` | `reply-reference.ts` | 78 |
+| `UntrustedContext.java` | `untrusted-context.ts` | 33 |
+| `Directives.java` | `directives.ts` | 103 |
+| `DirectiveHandlingShared.java` | `directive-handling.shared.ts` | 88 |
+| `ResponsePrefixTemplate.java` | `response-prefix-template.ts` | 63 |
+| `SubagentsUtils.java` | `subagents-utils.ts` | 95 |
+| `CommandsTypes.java` | `commands-types.ts` | 62 |
+
+## Phase 19 — Auto-Reply Batch 1: Top-Level (11 Java files)
+
+### Added (autoreply/ 包, 11 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `AutoReplyTypes.java` | `types.ts` | 31 |
+| `ReplyTokens.java` | `tokens.ts` | 34 |
+| `ModelDirective.java` | `model.ts` | 87 |
+| `ThinkingLevels.java` | `thinking.ts` | 172 |
+| `GroupActivation.java` | `group-activation.ts` | 48 |
+| `SendPolicy.java` | `send-policy.ts` | 52 |
+| `CommandNormalizer.java` | `commands-registry.ts` (partial) | 68 |
+| `CommandsArgs.java` | `commands-args.ts` | 95 |
+| `MediaNote.java` | `media-note.ts` | 111 |
+| `InboundDebounce.java` | `inbound-debounce.ts` | 155 |
+| `ToolMeta.java` | `tool-meta.ts` | 140 |
+
 ## Phase 18 — pi-embedded-runner/ Batch 4 (12 Java files)
 
 ### Added (runner/ 包, 12 new files)
