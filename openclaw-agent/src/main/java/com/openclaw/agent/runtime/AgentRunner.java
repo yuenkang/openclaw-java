@@ -134,6 +134,26 @@ public class AgentRunner {
                         .build();
             }
 
+            // --- Compaction: prune history if approaching context limit ---
+            if (context.isCompactionEnabled() && context.getMaxTokens() > 0) {
+                int currentTokens = CompactionService.estimateMessagesTokens(messages);
+                int contextBudget = context.getMaxTokens() * 4; // rough context window
+                if (currentTokens > contextBudget * 0.8) {
+                    log.info("History nearing context limit ({}/{} tokens), compacting",
+                            currentTokens, contextBudget);
+                    try {
+                        CompactionService.CompactionResult cr = CompactionService.compact(
+                                provider, context.getModelId(), messages,
+                                contextBudget, contextBudget / 4, null).join();
+                        messages = new ArrayList<>(cr.messages());
+                        log.info("Compacted: dropped {} tokens, {} remaining",
+                                cr.compactedTokens(), cr.remainingTokens());
+                    } catch (Exception e) {
+                        log.warn("Compaction failed, continuing with full history: {}", e.getMessage());
+                    }
+                }
+            }
+
             // Call LLM with streaming
             ModelProvider.ChatRequest request = ModelProvider.ChatRequest.builder()
                     .model(context.getModelId())
@@ -159,9 +179,15 @@ public class AgentRunner {
             try {
                 response = provider.chatStream(request, streamListener).join();
             } catch (Exception e) {
+                // Wrap as FailoverError if classifiable
+                FailoverError fe = FailoverError.coerceToFailoverError(
+                        e, null, context.getModelId(), null);
+                String errorMsg = fe != null
+                        ? String.format("LLM call failed [%s]: %s", fe.getReason(), fe.getMessage())
+                        : "LLM call failed: " + e.getMessage();
                 return AgentResult.builder()
                         .success(false)
-                        .error("LLM call failed: " + e.getMessage())
+                        .error(errorMsg)
                         .events(events)
                         .build();
             }
@@ -265,6 +291,7 @@ public class AgentRunner {
     @AllArgsConstructor
     public static class AgentRunContext {
         private String sessionKey;
+        private String agentId;
         private String modelId;
         private String systemPrompt;
         private List<ModelProvider.ChatMessage> messages;
@@ -273,6 +300,9 @@ public class AgentRunner {
         private double temperature;
         private OpenClawConfig config;
         private volatile boolean cancelled;
+        /** Enable automatic compaction when history nears context limit. */
+        @Builder.Default
+        private boolean compactionEnabled = false;
         @Builder.Default
         private AgentEventListener listener = NOOP_LISTENER;
     }
