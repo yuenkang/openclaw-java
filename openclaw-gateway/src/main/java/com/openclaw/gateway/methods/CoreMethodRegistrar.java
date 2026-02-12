@@ -29,23 +29,28 @@ import java.util.concurrent.CompletableFuture;
 @Component
 public class CoreMethodRegistrar {
 
+    private static final long START_TIME = System.currentTimeMillis();
+
     private final GatewayMethodRouter methodRouter;
     private final SessionStore sessionStore;
     private final SessionTranscriptStore transcriptStore;
     private final ConfigService configService;
     private final RouteResolver routeResolver;
+    private final ModelCatalog modelCatalog;
 
     public CoreMethodRegistrar(
             GatewayMethodRouter methodRouter,
             SessionStore sessionStore,
             SessionTranscriptStore transcriptStore,
             ConfigService configService,
-            RouteResolver routeResolver) {
+            RouteResolver routeResolver,
+            ModelCatalog modelCatalog) {
         this.methodRouter = methodRouter;
         this.sessionStore = sessionStore;
         this.transcriptStore = transcriptStore;
         this.configService = configService;
         this.routeResolver = routeResolver;
+        this.modelCatalog = modelCatalog;
     }
 
     @PostConstruct
@@ -53,6 +58,9 @@ public class CoreMethodRegistrar {
         // Status / health
         methodRouter.registerMethod("status", this::handleStatus);
         methodRouter.registerMethod("health", this::handleStatus);
+
+        // Models
+        methodRouter.registerMethod("models.list", this::handleModelsList);
 
         // Config
         methodRouter.registerMethod("config.get", this::handleConfigGet);
@@ -79,12 +87,33 @@ public class CoreMethodRegistrar {
     // --- Status / Health ---
 
     private CompletableFuture<Object> handleStatus(JsonNode params, GatewayConnection conn) {
+        Runtime rt = Runtime.getRuntime();
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("status", "ok");
         status.put("version", "0.1.0");
+        status.put("uptimeMs", System.currentTimeMillis() - START_TIME);
         status.put("sessions", sessionStore.size());
-        status.put("uptime", System.currentTimeMillis());
+        status.put("providers", modelCatalog.listProviders().size());
+
+        Map<String, Object> runtime = new LinkedHashMap<>();
+        runtime.put("javaVersion", System.getProperty("java.version"));
+        runtime.put("os", System.getProperty("os.name") + " " + System.getProperty("os.arch"));
+        runtime.put("maxMemoryMb", rt.maxMemory() / (1024 * 1024));
+        runtime.put("usedMemoryMb", (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024));
+        runtime.put("availableProcessors", rt.availableProcessors());
+        status.put("runtime", runtime);
+
         return CompletableFuture.completedFuture(status);
+    }
+
+    // --- Models ---
+
+    private CompletableFuture<Object> handleModelsList(JsonNode params, GatewayConnection conn) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("models", modelCatalog.listModels());
+        result.put("providers", modelCatalog.listProviders());
+        result.put("aliases", modelCatalog.listAliases());
+        return CompletableFuture.completedFuture(result);
     }
 
     // --- Config ---
