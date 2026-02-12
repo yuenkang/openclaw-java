@@ -28,9 +28,56 @@ public interface ModelProvider {
     CompletableFuture<ChatResponse> chat(ChatRequest request);
 
     /**
+     * Send a streaming chat completion request.
+     * The listener receives real-time events (text deltas, tool calls).
+     * Default implementation falls back to non-streaming chat().
+     */
+    default CompletableFuture<ChatResponse> chatStream(
+            ChatRequest request, StreamListener listener) {
+        return chat(request).thenApply(response -> {
+            // Emit text as a single delta
+            if (response.getMessage() != null
+                    && response.getMessage().getContent() != null
+                    && !response.getMessage().getContent().isEmpty()) {
+                listener.onText(response.getMessage().getContent());
+            }
+            // Emit tool uses
+            if (response.getToolUses() != null) {
+                for (ToolUse tu : response.getToolUses()) {
+                    listener.onToolUse(tu);
+                }
+            }
+            if (response.getUsage() != null) {
+                listener.onUsage(response.getUsage());
+            }
+            return response;
+        });
+    }
+
+    /**
      * List available models on this provider.
      */
     List<ModelInfo> listModels();
+
+    // --- Streaming listener ---
+
+    /**
+     * Listener for streaming LLM events.
+     * Receives real-time deltas during a chat completion.
+     */
+    interface StreamListener {
+        /** Called when the LLM produces a text delta. */
+        default void onText(String delta) {
+        }
+
+        /** Called when the LLM invokes a tool (complete tool_use block). */
+        default void onToolUse(ToolUse toolUse) {
+        }
+
+        /** Called with token usage information. */
+        default void onUsage(Usage usage) {
+        }
+    }
 
     // --- Supporting types ---
 

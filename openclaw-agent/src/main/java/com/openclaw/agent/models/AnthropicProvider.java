@@ -101,6 +101,164 @@ public class AnthropicProvider implements ModelProvider {
     }
 
     @Override
+    public CompletableFuture<ChatResponse> chatStream(
+            ChatRequest request, StreamListener listener) {
+        CompletableFuture<ChatResponse> future = new CompletableFuture<>();
+
+        try {
+            Map<String, Object> body = buildRequestBody(request);
+            body.put("stream", true);
+            String jsonBody = objectMapper.writeValueAsString(body);
+
+            Request httpRequest = new Request.Builder()
+                    .url(baseUrl + "/messages")
+                    .header("x-api-key", apiKey)
+                    .header("anthropic-version", API_VERSION)
+                    .header("content-type", "application/json")
+                    .post(RequestBody.create(jsonBody, MediaType.parse("application/json")))
+                    .build();
+
+            // Mutable state for accumulating the streaming response
+            ChatResponse.ChatResponseBuilder responseBuilder = ChatResponse.builder();
+            StringBuilder textContent = new StringBuilder();
+            List<ToolUse> toolUses = new ArrayList<>();
+            // Track current tool being built
+            String[] currentToolId = { null };
+            String[] currentToolName = { null };
+            StringBuilder currentToolInput = new StringBuilder();
+
+            EventSource.Factory factory = EventSources.createFactory(httpClient);
+            factory.newEventSource(httpRequest, new EventSourceListener() {
+                @Override
+                public void onEvent(EventSource source, String id, String type, String data) {
+                    try {
+                        if ("[DONE]".equals(data))
+                            return;
+                        JsonNode event = objectMapper.readTree(data);
+
+                        switch (type != null ? type : "") {
+                            case "message_start" -> {
+                                JsonNode msg = event.path("message");
+                                responseBuilder.id(msg.path("id").asText());
+                                responseBuilder.model(msg.path("model").asText());
+                                JsonNode usageNode = msg.path("usage");
+                                if (!usageNode.isMissingNode()) {
+                                    responseBuilder.usage(Usage.builder()
+                                            .inputTokens(usageNode.path("input_tokens").asInt())
+                                            .build());
+                                }
+                            }
+                            case "content_block_start" -> {
+                                JsonNode cb = event.path("content_block");
+                                String cbType = cb.path("type").asText();
+                                if ("tool_use".equals(cbType)) {
+                                    currentToolId[0] = cb.path("id").asText();
+                                    currentToolName[0] = cb.path("name").asText();
+                                    currentToolInput.setLength(0);
+                                }
+                            }
+                            case "content_block_delta" -> {
+                                JsonNode delta = event.path("delta");
+                                String deltaType = delta.path("type").asText();
+                                if ("text_delta".equals(deltaType)) {
+                                    String text = delta.path("text").asText("");
+                                    if (!text.isEmpty()) {
+                                        textContent.append(text);
+                                        listener.onText(text);
+                                    }
+                                } else if ("input_json_delta".equals(deltaType)) {
+                                    String partial = delta.path("partial_json").asText("");
+                                    currentToolInput.append(partial);
+                                }
+                            }
+                            case "content_block_stop" -> {
+                                if (currentToolId[0] != null) {
+                                    @SuppressWarnings("unchecked")
+                                    Map<String, Object> input = currentToolInput.length() > 0
+                                            ? objectMapper.readValue(currentToolInput.toString(), Map.class)
+                                            : Map.of();
+                                    ToolUse tu = ToolUse.builder()
+                                            .id(currentToolId[0])
+                                            .name(currentToolName[0])
+                                            .input(input)
+                                            .build();
+                                    toolUses.add(tu);
+                                    listener.onToolUse(tu);
+                                    currentToolId[0] = null;
+                                    currentToolName[0] = null;
+                                    currentToolInput.setLength(0);
+                                }
+                            }
+                            case "message_delta" -> {
+                                JsonNode delta = event.path("delta");
+                                responseBuilder.stopReason(delta.path("stop_reason").asText());
+                                JsonNode usageNode = event.path("usage");
+                                if (!usageNode.isMissingNode()) {
+                                    responseBuilder.usage(Usage.builder()
+                                            .inputTokens(usageNode.path("input_tokens").asInt())
+                                            .outputTokens(usageNode.path("output_tokens").asInt())
+                                            .build());
+                                    listener.onUsage(responseBuilder.build().getUsage());
+                                }
+                            }
+                            case "message_stop" -> {
+                                responseBuilder.message(ChatMessage.builder()
+                                        .role("assistant")
+                                        .content(textContent.toString())
+                                        .build());
+                                if (!toolUses.isEmpty()) {
+                                    responseBuilder.toolUses(new ArrayList<>(toolUses));
+                                }
+                                future.complete(responseBuilder.build());
+                            }
+                            case "error" -> {
+                                String errMsg = event.path("error").path("message").asText("Unknown streaming error");
+                                future.completeExceptionally(new RuntimeException("Anthropic stream error: " + errMsg));
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.error("Error parsing Anthropic SSE event: {}", e.getMessage(), e);
+                    }
+                }
+
+                @Override
+                public void onFailure(EventSource source, Throwable t, Response response) {
+                    if (!future.isDone()) {
+                        String errMsg = t != null ? t.getMessage() : "Unknown SSE failure";
+                        if (response != null && response.body() != null) {
+                            try {
+                                errMsg += " - " + response.body().string();
+                            } catch (IOException ignored) {
+                            }
+                        }
+                        future.completeExceptionally(new RuntimeException("Anthropic stream failed: " + errMsg));
+                    }
+                }
+
+                @Override
+                public void onClosed(EventSource source) {
+                    if (!future.isDone()) {
+                        // Stream closed before message_stop — build response from what we have
+                        responseBuilder.message(ChatMessage.builder()
+                                .role("assistant")
+                                .content(textContent.toString())
+                                .build());
+                        if (!toolUses.isEmpty()) {
+                            responseBuilder.toolUses(new ArrayList<>(toolUses));
+                        }
+                        future.complete(responseBuilder.build());
+                    }
+                }
+            });
+
+        } catch (JsonProcessingException e) {
+            future.completeExceptionally(e);
+        }
+
+        return future;
+    }
+
+    @Override
     public List<ModelInfo> listModels() {
         return List.of(
                 ModelInfo.builder().id("claude-sonnet-4-5-20250514").name("Claude Sonnet 4.5").contextWindow(200000)

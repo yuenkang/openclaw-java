@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
+import okhttp3.sse.EventSource;
+import okhttp3.sse.EventSourceListener;
+import okhttp3.sse.EventSources;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -88,6 +91,173 @@ public class OpenAICompatibleProvider implements ModelProvider {
                         String json = responseBody != null ? responseBody.string() : "{}";
                         ChatResponse chatResponse = parseResponse(json);
                         future.complete(chatResponse);
+                    }
+                }
+            });
+
+        } catch (JsonProcessingException e) {
+            future.completeExceptionally(e);
+        }
+
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<ChatResponse> chatStream(
+            ChatRequest request, StreamListener listener) {
+        CompletableFuture<ChatResponse> future = new CompletableFuture<>();
+
+        try {
+            Map<String, Object> body = buildRequestBody(request);
+            body.put("stream", true);
+            body.put("stream_options", Map.of("include_usage", true));
+            String jsonBody = objectMapper.writeValueAsString(body);
+
+            Request.Builder httpReqBuilder = new Request.Builder()
+                    .url(baseUrl + "/chat/completions")
+                    .header("content-type", "application/json")
+                    .post(RequestBody.create(jsonBody, MediaType.parse("application/json")));
+
+            if (apiKey != null && !apiKey.isEmpty()) {
+                httpReqBuilder.header("Authorization", "Bearer " + apiKey);
+            }
+
+            // Mutable state for accumulating the streaming response
+            ChatResponse.ChatResponseBuilder responseBuilder = ChatResponse.builder();
+            StringBuilder textContent = new StringBuilder();
+            // Track tool calls: index → (id, name, arguments_builder)
+            Map<Integer, String[]> toolIds = new LinkedHashMap<>();
+            Map<Integer, StringBuilder> toolArgs = new LinkedHashMap<>();
+
+            EventSource.Factory factory = EventSources.createFactory(httpClient);
+            factory.newEventSource(httpReqBuilder.build(), new EventSourceListener() {
+                @Override
+                public void onEvent(EventSource source, String id, String type, String data) {
+                    try {
+                        if ("[DONE]".equals(data)) {
+                            // Build final response
+                            responseBuilder.message(ChatMessage.builder()
+                                    .role("assistant")
+                                    .content(textContent.toString())
+                                    .build());
+                            List<ToolUse> toolUses = buildToolUses();
+                            if (!toolUses.isEmpty()) {
+                                responseBuilder.toolUses(toolUses);
+                            }
+                            future.complete(responseBuilder.build());
+                            return;
+                        }
+
+                        JsonNode chunk = objectMapper.readTree(data);
+                        responseBuilder.id(chunk.path("id").asText());
+                        responseBuilder.model(chunk.path("model").asText());
+
+                        // Usage (sent in final chunk with stream_options.include_usage)
+                        JsonNode usageNode = chunk.path("usage");
+                        if (!usageNode.isMissingNode() && !usageNode.isNull()) {
+                            Usage usage = Usage.builder()
+                                    .inputTokens(usageNode.path("prompt_tokens").asInt())
+                                    .outputTokens(usageNode.path("completion_tokens").asInt())
+                                    .build();
+                            responseBuilder.usage(usage);
+                            listener.onUsage(usage);
+                        }
+
+                        JsonNode choices = chunk.path("choices");
+                        if (!choices.isArray() || choices.isEmpty())
+                            return;
+
+                        JsonNode choice = choices.get(0);
+                        JsonNode delta = choice.path("delta");
+                        String finishReason = choice.path("finish_reason").asText(null);
+                        if (finishReason != null) {
+                            responseBuilder.stopReason(finishReason);
+                        }
+
+                        // Text delta
+                        String content = delta.path("content").asText(null);
+                        if (content != null && !content.isEmpty()) {
+                            textContent.append(content);
+                            listener.onText(content);
+                        }
+
+                        // Tool call deltas
+                        JsonNode toolCallsNode = delta.path("tool_calls");
+                        if (toolCallsNode.isArray()) {
+                            for (JsonNode tc : toolCallsNode) {
+                                int idx = tc.path("index").asInt(0);
+                                JsonNode fn = tc.path("function");
+
+                                // First chunk for this tool call has id and name
+                                String tcId = tc.path("id").asText(null);
+                                if (tcId != null) {
+                                    toolIds.put(idx, new String[] { tcId, fn.path("name").asText("") });
+                                    toolArgs.putIfAbsent(idx, new StringBuilder());
+                                }
+
+                                // Accumulate arguments
+                                String args = fn.path("arguments").asText(null);
+                                if (args != null) {
+                                    toolArgs.computeIfAbsent(idx, k -> new StringBuilder()).append(args);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.error("Error parsing OpenAI SSE chunk: {}", e.getMessage(), e);
+                    }
+                }
+
+                private List<ToolUse> buildToolUses() {
+                    List<ToolUse> result = new ArrayList<>();
+                    for (Map.Entry<Integer, String[]> entry : toolIds.entrySet()) {
+                        int idx = entry.getKey();
+                        String[] idAndName = entry.getValue();
+                        StringBuilder argsBuilder = toolArgs.getOrDefault(idx, new StringBuilder());
+                        try {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> input = argsBuilder.length() > 0
+                                    ? objectMapper.readValue(argsBuilder.toString(), Map.class)
+                                    : Map.of();
+                            ToolUse tu = ToolUse.builder()
+                                    .id(idAndName[0])
+                                    .name(idAndName[1])
+                                    .input(input)
+                                    .build();
+                            result.add(tu);
+                            listener.onToolUse(tu);
+                        } catch (Exception e) {
+                            log.error("Error parsing tool args for {}: {}", idAndName[1], e.getMessage());
+                        }
+                    }
+                    return result;
+                }
+
+                @Override
+                public void onFailure(EventSource source, Throwable t, Response response) {
+                    if (!future.isDone()) {
+                        String errMsg = t != null ? t.getMessage() : "Unknown SSE failure";
+                        if (response != null && response.body() != null) {
+                            try {
+                                errMsg += " - " + response.body().string();
+                            } catch (IOException ignored) {
+                            }
+                        }
+                        future.completeExceptionally(new RuntimeException("OpenAI stream failed: " + errMsg));
+                    }
+                }
+
+                @Override
+                public void onClosed(EventSource source) {
+                    if (!future.isDone()) {
+                        responseBuilder.message(ChatMessage.builder()
+                                .role("assistant")
+                                .content(textContent.toString())
+                                .build());
+                        List<ToolUse> toolUses = buildToolUses();
+                        if (!toolUses.isEmpty()) {
+                            responseBuilder.toolUses(toolUses);
+                        }
+                        future.complete(responseBuilder.build());
                     }
                 }
             });
