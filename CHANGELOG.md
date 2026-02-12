@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-02-12 — Phase 5B: Agent Runtime 核心组件
+
+### Added
+- **FailoverError** — 错误分类异常 + HTTP 状态码映射 + regex 模式匹配（auth/billing/rate_limit/timeout/context_overflow）
+- **CompactionService** — 会话历史压缩：token 估算 + 自适应裁剪 + LLM 摘要 + 分段合并
+- **AgentIdentity** — Agent 身份解析、消息前缀、响应前缀、ack 表情
+
+### Changed
+- `SystemPromptBuilder` 重写 — +PromptMode (FULL/MINIMAL/NONE) + time/skills/memory/docs/userIdentity 段
+- `AgentRunner` — 集成 CompactionService（context 超限自动压缩）+ FailoverError 错误包装 + agentId/compactionEnabled 字段
+
+### Removed
+- `ModelFallbackHandler` — 功能已被 Phase 5A 的 `ModelFallbackRunner` 完整覆盖
+
 ## 2026-02-12 — Phase 5A: Model/Provider 基础设施
 
 ### Added
