@@ -1,9 +1,11 @@
 package com.openclaw.app.bridge;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.openclaw.agent.hooks.InternalHookRegistry;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.runtime.AgentRunner;
+import com.openclaw.agent.runtime.SubagentRegistry;
 import com.openclaw.agent.tools.ToolRegistry;
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
@@ -11,6 +13,7 @@ import com.openclaw.gateway.session.SessionStore;
 import com.openclaw.gateway.websocket.GatewayConnection;
 import com.openclaw.gateway.websocket.GatewayMethodRouter;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +32,8 @@ public class AgentMethodRegistrar {
     private final SessionStore sessionStore;
     private final AgentRunner agentRunner;
     private final ConfigService configService;
+    private final InternalHookRegistry hookRegistry;
+    private final SubagentRegistry subagentRegistry;
 
     public AgentMethodRegistrar(
             GatewayMethodRouter methodRouter,
@@ -38,15 +43,36 @@ public class AgentMethodRegistrar {
             ConfigService configService) {
         this.methodRouter = methodRouter;
         this.sessionStore = sessionStore;
-        this.agentRunner = new AgentRunner(modelProviderRegistry, toolRegistry);
         this.configService = configService;
+
+        // Create application-level hook registry
+        this.hookRegistry = new InternalHookRegistry();
+
+        // Create subagent registry with persistence
+        String stateDir = System.getProperty("user.dir") + "/.openclaw";
+        this.subagentRegistry = new SubagentRegistry(
+                stateDir + "/subagents/runs.json");
+        this.subagentRegistry.restoreFromDisk();
+
+        // Inject into AgentRunner
+        this.agentRunner = new AgentRunner(
+                modelProviderRegistry, toolRegistry, 25,
+                hookRegistry, subagentRegistry);
     }
 
     @PostConstruct
     public void registerMethods() {
         methodRouter.registerMethod("agent.run", this::handleAgentRun);
         methodRouter.registerMethod("agent.message", this::handleAgentMessage);
-        log.info("Registered 2 agent RPC methods");
+        log.info("Registered 2 agent RPC methods (hooks={}, subagent={})",
+                hookRegistry != null, subagentRegistry != null);
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        if (subagentRegistry != null) {
+            subagentRegistry.shutdown();
+        }
     }
 
     /**
@@ -76,7 +102,11 @@ public class AgentMethodRegistrar {
 
         OpenClawConfig config = configService.loadConfig();
 
+        // Generate run ID
+        String runId = UUID.randomUUID().toString().substring(0, 8);
+
         AgentRunner.AgentRunContext context = AgentRunner.AgentRunContext.builder()
+                .runId(runId)
                 .modelId(resolveModel(modelId, config))
                 .messages(messages)
                 .systemPrompt(getTextParam(params, "systemPrompt", null))
@@ -89,7 +119,6 @@ public class AgentMethodRegistrar {
 
         // Track run in session if sessionKey provided
         String sessionKey = context.getSessionKey();
-        String runId = UUID.randomUUID().toString().substring(0, 8);
 
         if (sessionKey != null) {
             sessionStore.findBySessionKey(sessionKey).ifPresent(session -> {

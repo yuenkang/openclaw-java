@@ -1,8 +1,12 @@
 package com.openclaw.agent.runtime;
 
+import com.openclaw.agent.hooks.InternalHookRegistry;
+import com.openclaw.agent.hooks.InternalHookRegistry.HookEvent;
+import com.openclaw.agent.hooks.InternalHookRegistry.HookEventType;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.prompt.SystemPromptBuilder;
+import com.openclaw.agent.skills.SkillLoader;
 import com.openclaw.agent.tools.AgentTool;
 import com.openclaw.agent.tools.ToolRegistry;
 import com.openclaw.common.config.OpenClawConfig;
@@ -69,15 +73,24 @@ public class AgentRunner {
     private final ModelProviderRegistry modelRegistry;
     private final ToolRegistry toolRegistry;
     private final int maxTurns;
+    private final InternalHookRegistry hookRegistry;
+    private final SubagentRegistry subagentRegistry;
 
     public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry) {
-        this(modelRegistry, toolRegistry, 25);
+        this(modelRegistry, toolRegistry, 25, null, null);
     }
 
     public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry, int maxTurns) {
+        this(modelRegistry, toolRegistry, maxTurns, null, null);
+    }
+
+    public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry, int maxTurns,
+            InternalHookRegistry hookRegistry, SubagentRegistry subagentRegistry) {
         this.modelRegistry = modelRegistry;
         this.toolRegistry = toolRegistry;
         this.maxTurns = maxTurns;
+        this.hookRegistry = hookRegistry;
+        this.subagentRegistry = subagentRegistry;
     }
 
     /**
@@ -108,13 +121,35 @@ public class AgentRunner {
                     .build();
         }
 
+        // --- Hook: agent run start ---
+        if (hookRegistry != null) {
+            hookRegistry.trigger(new HookEvent(
+                    HookEventType.AGENT, "run:start",
+                    context.getSessionKey(),
+                    Map.of(
+                            "runId", context.getRunId() != null ? context.getRunId() : "unknown",
+                            "modelId", context.getModelId() != null ? context.getModelId() : "")));
+        }
+
         // Auto-build system prompt if not provided
         if (context.getSystemPrompt() == null || context.getSystemPrompt().isBlank()) {
+            // Resolve skills prompt via SkillLoader
+            String skillsPrompt = null;
+            if (context.getConfig() != null) {
+                try {
+                    skillsPrompt = SkillLoader.resolveSkillsPromptForRun(
+                            context.getCwd(), context.getConfig());
+                } catch (Exception e) {
+                    log.debug("Skills prompt generation failed: {}", e.getMessage());
+                }
+            }
+
             String autoPrompt = SystemPromptBuilder.build(
                     SystemPromptBuilder.SystemPromptParams.builder()
                             .modelId(context.getModelId())
                             .workspaceDir(context.getCwd())
                             .toolNames(new ArrayList<>(toolRegistry.getToolNames()))
+                            .skillsPrompt(skillsPrompt)
                             .build());
             context.setSystemPrompt(autoPrompt);
         }
@@ -251,18 +286,42 @@ public class AgentRunner {
             }
         }
 
-        return AgentResult.builder()
+        AgentResult maxTurnsResult = AgentResult.builder()
                 .success(false)
                 .error("Max turns exceeded (" + maxTurns + ")")
                 .events(events)
                 .turns(turns)
                 .build();
+        triggerRunEnd(context, maxTurnsResult);
+        return maxTurnsResult;
+    }
+
+    private void triggerRunEnd(AgentRunContext context, AgentResult result) {
+        if (hookRegistry != null) {
+            hookRegistry.trigger(new HookEvent(
+                    HookEventType.AGENT, "run:end",
+                    context.getSessionKey(),
+                    Map.of(
+                            "runId", context.getRunId() != null ? context.getRunId() : "unknown",
+                            "success", String.valueOf(result.isSuccess()),
+                            "turns", String.valueOf(result.getTurns()))));
+        }
     }
 
     private AgentTool.ToolResult executeTool(ModelProvider.ToolUse toolUse, AgentRunContext context) {
         Optional<AgentTool> tool = toolRegistry.get(toolUse.getName());
         if (tool.isEmpty()) {
             return AgentTool.ToolResult.fail("Unknown tool: " + toolUse.getName());
+        }
+
+        // Hook: tool execution start
+        if (hookRegistry != null) {
+            hookRegistry.trigger(new HookEvent(
+                    HookEventType.AGENT, "tool:execute:start",
+                    context.getSessionKey(),
+                    Map.of(
+                            "toolName", toolUse.getName(),
+                            "toolId", toolUse.getId() != null ? toolUse.getId() : "")));
         }
 
         try {
@@ -276,9 +335,35 @@ public class AgentRunner {
                     .config(context.getConfig())
                     .build();
 
-            return tool.get().execute(toolCtx).join();
+            AgentTool.ToolResult result = tool.get().execute(toolCtx).join();
+
+            // Hook: tool execution end
+            if (hookRegistry != null) {
+                hookRegistry.trigger(new HookEvent(
+                        HookEventType.AGENT, "tool:execute:end",
+                        context.getSessionKey(),
+                        Map.of(
+                                "toolName", toolUse.getName(),
+                                "toolId", toolUse.getId() != null ? toolUse.getId() : "",
+                                "success", String.valueOf(result.isSuccess()))));
+            }
+
+            return result;
         } catch (Exception e) {
             log.error("Tool {} execution failed: {}", toolUse.getName(), e.getMessage(), e);
+
+            // Hook: tool execution end (error)
+            if (hookRegistry != null) {
+                hookRegistry.trigger(new HookEvent(
+                        HookEventType.AGENT, "tool:execute:end",
+                        context.getSessionKey(),
+                        Map.of(
+                                "toolName", toolUse.getName(),
+                                "toolId", toolUse.getId() != null ? toolUse.getId() : "",
+                                "success", "false",
+                                "error", e.getMessage() != null ? e.getMessage() : "unknown")));
+            }
+
             return AgentTool.ToolResult.fail("Execution error: " + e.getMessage());
         }
     }
@@ -290,6 +375,7 @@ public class AgentRunner {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class AgentRunContext {
+        private String runId;
         private String sessionKey;
         private String agentId;
         private String modelId;
