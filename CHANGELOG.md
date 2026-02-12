@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-02-12 — Phase 5E: Subagent + AuthHealth + CacheTrace
+
+### Added
+- **SubagentRegistry** — 子 agent run 注册/完成/清理/JSON 持久化/TTL sweeper/subagent 系统 prompt/announce callback
+- **AuthHealthService** — OAuth/token/API key 健康评估 + provider 聚合 + refresh token 自动刷新检测
+- **CacheTrace** — JSONL 诊断 cache 跟踪 + SHA-256 digest + async writer + env/config 配置解析
+
 ## 2026-02-12 — Phase 5D: Hooks 事件系统 + Skills 技能加载
 
 ### Added
