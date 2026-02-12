@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-02-12 — Phase 5C: Session 基础设施层
+
+### Added
+- **SessionWriteLock** — 文件锁 + PID 跟踪 + stale 检测 + 引用计数 + JVM shutdown hook
+- **AgentPaths** — 状态目录/agent 目录/workspace 路径解析（env override）
+- **AgentScope** — Agent 列表/默认 agent/sessionKey→agentId/config/model/fallback 解析
+- **BashProcessRegistry** — 后台进程生命周期：output 缓冲 + cap 截断 + TTL sweeper
+- **BootstrapResolver** — 工作区 `.openclaw/` bootstrap 文件加载 + embedded context 构建
+
 ## 2026-02-12 — Phase 5B: Agent Runtime 核心组件
 
 ### Added
