@@ -207,4 +207,114 @@ public class SessionTranscriptStore {
         // Create fresh with header
         return ensureTranscriptFile(sessionId);
     }
+
+    /**
+     * Read a preview of recent transcript items, truncated to maxChars per item.
+     * Corresponds to TypeScript's readSessionPreviewItemsFromTranscript.
+     *
+     * @param sessionId the session ID
+     * @param limit     max number of items to return
+     * @param maxChars  max characters per content snippet
+     * @return list of preview maps with "role", "content", "ts" keys
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> readPreview(String sessionId, int limit, int maxChars) {
+        Path filePath = sessionsDir.resolve(sessionId + ".jsonl");
+        if (!Files.exists(filePath)) {
+            return Collections.emptyList();
+        }
+
+        // Read all message lines, then take the last N
+        List<Map<String, Object>> items = new ArrayList<>();
+        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty())
+                    continue;
+                try {
+                    Map<String, Object> parsed = mapper.readValue(line, Map.class);
+                    Object msg = parsed.get("message");
+                    if (msg instanceof Map) {
+                        Map<String, Object> msgMap = (Map<String, Object>) msg;
+                        Map<String, Object> item = new LinkedHashMap<>();
+                        item.put("role", msgMap.getOrDefault("role", "unknown"));
+
+                        String content = String.valueOf(msgMap.getOrDefault("content", ""));
+                        if (content.length() > maxChars) {
+                            content = content.substring(0, maxChars) + "…";
+                        }
+                        item.put("content", content);
+
+                        Object ts = parsed.get("ts");
+                        if (ts != null)
+                            item.put("ts", ts);
+
+                        items.add(item);
+                    }
+                } catch (Exception e) {
+                    // skip malformed
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to read preview for session {}: {}", sessionId, e.getMessage());
+            return Collections.emptyList();
+        }
+
+        // Return the last `limit` items
+        if (items.size() <= limit) {
+            return items;
+        }
+        return items.subList(items.size() - limit, items.size());
+    }
+
+    /**
+     * Compact a session transcript, keeping only the last maxLines lines.
+     * Archives the original file before truncating.
+     * Corresponds to TypeScript's sessions.compact handler logic.
+     *
+     * @param sessionId the session ID
+     * @param maxLines  max lines to keep
+     * @return CompactResult with details
+     */
+    public CompactResult compact(String sessionId, int maxLines) throws IOException {
+        Path filePath = sessionsDir.resolve(sessionId + ".jsonl");
+        if (!Files.exists(filePath)) {
+            return new CompactResult(false, 0, null);
+        }
+
+        List<String> lines = Files.readAllLines(filePath);
+        // Filter empty lines
+        lines.removeIf(l -> l.trim().isEmpty());
+
+        if (lines.size() <= maxLines) {
+            return new CompactResult(false, lines.size(), null);
+        }
+
+        // Archive original file
+        String archiveName = sessionId + ".bak." + System.currentTimeMillis() + ".jsonl";
+        Path archivePath = sessionsDir.resolve(archiveName);
+        Files.copy(filePath, archivePath, StandardCopyOption.REPLACE_EXISTING);
+
+        // Keep only the last maxLines
+        List<String> keptLines = lines.subList(lines.size() - maxLines, lines.size());
+        Files.writeString(filePath, String.join("\n", keptLines) + "\n",
+                StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+
+        log.info("Compacted transcript for session {}: {} → {} lines, archived to {}",
+                sessionId, lines.size(), keptLines.size(), archivePath);
+
+        return new CompactResult(true, keptLines.size(), archivePath.toString());
+    }
+
+    /**
+     * Result of a transcript compaction operation.
+     */
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    public static class CompactResult {
+        private final boolean compacted;
+        private final int keptLines;
+        private final String archived;
+    }
 }

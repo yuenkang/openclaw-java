@@ -1,7 +1,5 @@
 package com.openclaw.plugin;
 
-import java.util.List;
-
 /**
  * Plugin interface for OpenClaw extensions.
  * Corresponds to TypeScript's OpenClawPluginDefinition (plugins/types.ts).

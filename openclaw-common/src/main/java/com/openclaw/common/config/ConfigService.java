@@ -63,6 +63,26 @@ public class ConfigService {
         return loadConfig();
     }
 
+    /**
+     * Save the given config to disk and invalidate the cache.
+     * Corresponds to TypeScript's config.set / config.apply logic.
+     */
+    public void saveConfig(OpenClawConfig config) throws IOException {
+        Files.createDirectories(configPath.getParent());
+        String json = objectMapper.writerWithDefaultPrettyPrinter()
+                .writeValueAsString(config);
+        Files.writeString(configPath, json);
+        cache.invalidateAll();
+        log.info("Config saved to: {}", configPath);
+    }
+
+    /**
+     * Get the config file path.
+     */
+    public Path getConfigPath() {
+        return configPath;
+    }
+
     private OpenClawConfig doLoadConfig() {
         try {
             if (!Files.exists(configPath)) {

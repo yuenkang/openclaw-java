@@ -67,6 +67,9 @@ public class CoreMethodRegistrar {
 
         // Session management
         methodRouter.registerMethod("sessions.list", this::handleSessionList);
+        methodRouter.registerMethod("sessions.preview", this::handleSessionsPreview);
+        methodRouter.registerMethod("sessions.resolve", this::handleSessionsResolve);
+        methodRouter.registerMethod("sessions.compact", this::handleSessionsCompact);
         methodRouter.registerMethod("session.create", this::handleSessionCreate);
         methodRouter.registerMethod("session.get", this::handleSessionGet);
         methodRouter.registerMethod("session.cancel", this::handleSessionCancel);
@@ -395,6 +398,131 @@ public class CoreMethodRegistrar {
     }
 
     // --- Route ---
+
+    /**
+     * sessions.preview — Return recent transcript preview items for given session
+     * keys.
+     * Corresponds to TypeScript's sessions.preview handler.
+     */
+    private CompletableFuture<Object> handleSessionsPreview(JsonNode params, GatewayConnection conn) {
+        // Extract keys array
+        List<String> keys = new ArrayList<>();
+        if (params.has("keys") && params.get("keys").isArray()) {
+            for (JsonNode keyNode : params.get("keys")) {
+                String k = keyNode.asText("").trim();
+                if (!k.isEmpty())
+                    keys.add(k);
+            }
+        }
+        int limit = params.has("limit") ? Math.max(1, params.get("limit").asInt(12)) : 12;
+        int maxChars = params.has("maxChars") ? Math.max(20, params.get("maxChars").asInt(240)) : 240;
+
+        List<Map<String, Object>> previews = new ArrayList<>();
+        for (String key : keys) {
+            Map<String, Object> preview = new LinkedHashMap<>();
+            preview.put("key", key);
+
+            // Find session by sessionKey
+            var sessionOpt = sessionStore.findBySessionKey(key);
+            if (sessionOpt.isEmpty()) {
+                preview.put("status", "missing");
+                preview.put("items", Collections.emptyList());
+            } else {
+                var session = sessionOpt.get();
+                var items = transcriptStore.readPreview(session.getSessionId(), limit, maxChars);
+                preview.put("status", items.isEmpty() ? "empty" : "ok");
+                preview.put("items", items);
+            }
+            previews.add(preview);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ts", System.currentTimeMillis());
+        result.put("previews", previews);
+        return CompletableFuture.completedFuture(result);
+    }
+
+    /**
+     * sessions.resolve — Resolve a session key from various parameters.
+     * Simplified version of TypeScript's sessions.resolve handler.
+     */
+    private CompletableFuture<Object> handleSessionsResolve(JsonNode params, GatewayConnection conn) {
+        String agentId = getTextParam(params, "agentId", "default");
+        String channelId = getTextParam(params, "channelId", null);
+        String peerId = getTextParam(params, "peerId", null);
+
+        // Build a session key from components
+        StringBuilder keyBuilder = new StringBuilder();
+        if (agentId != null && !"default".equals(agentId)) {
+            keyBuilder.append(agentId).append(":");
+        }
+        if (channelId != null) {
+            keyBuilder.append(channelId);
+            if (peerId != null) {
+                keyBuilder.append(":").append(peerId);
+            }
+        } else {
+            keyBuilder.append("main");
+        }
+
+        String resolvedKey = keyBuilder.toString();
+        return CompletableFuture.completedFuture(Map.of("ok", true, "key", resolvedKey));
+    }
+
+    /**
+     * sessions.compact — Compact a session transcript to keep only recent lines.
+     * Corresponds to TypeScript's sessions.compact handler.
+     */
+    private CompletableFuture<Object> handleSessionsCompact(JsonNode params, GatewayConnection conn) {
+        String sessionId = getTextParam(params, "sessionId", null);
+        String sessionKey = getTextParam(params, "key", null);
+        int maxLines = params.has("maxLines") ? Math.max(1, params.get("maxLines").asInt(400)) : 400;
+
+        // Resolve session
+        Optional<AcpSession> sessionOpt;
+        if (sessionId != null) {
+            sessionOpt = sessionStore.getSession(sessionId);
+        } else if (sessionKey != null) {
+            sessionOpt = sessionStore.findBySessionKey(sessionKey);
+        } else {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("key or sessionId is required"));
+        }
+
+        if (sessionOpt.isEmpty()) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("ok", true);
+            result.put("compacted", false);
+            result.put("reason", "session not found");
+            return CompletableFuture.completedFuture(result);
+        }
+
+        String sid = sessionOpt.get().getSessionId();
+        try {
+            var compactResult = transcriptStore.compact(sid, maxLines);
+
+            // Reset token counters after compaction
+            if (compactResult.isCompacted()) {
+                sessionStore.updateSession(sid, s -> {
+                    s.setInputTokens(0);
+                    s.setOutputTokens(0);
+                    s.setTotalTokens(0);
+                });
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("ok", true);
+            result.put("compacted", compactResult.isCompacted());
+            result.put("kept", compactResult.getKeptLines());
+            if (compactResult.getArchived() != null) {
+                result.put("archived", compactResult.getArchived());
+            }
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            log.warn("Failed to compact transcript for session {}: {}", sid, e.getMessage());
+            return CompletableFuture.failedFuture(e);
+        }
+    }
 
     private CompletableFuture<Object> handleRouteResolve(JsonNode params, GatewayConnection conn) {
         RouteResolver.RouteContext ctx = RouteResolver.RouteContext.builder()
