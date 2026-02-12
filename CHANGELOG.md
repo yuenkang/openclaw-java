@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 18 — pi-embedded-helpers/ Batch 3 (9 Java files)
+
+### Added (embedded/ 包, 9 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `EmbeddedTypes.java` | `types.ts` | 35 |
+| `MessagingDedupe.java` | `messaging-dedupe.ts` | 68 |
+| `GoogleHelpers.java` | `google.ts` | 32 |
+| `ThinkingHelpers.java` | `thinking.ts` | 90 |
+| `TurnValidation.java` | `turns.ts` | 115 |
+| `BootstrapHelpers.java` | `bootstrap.ts` | 198 |
+| `EmbeddedErrors.java` | `errors.ts` | 242 |
+| `OpenAIHelpers.java` | `openai.ts` | 136 |
+| `ImageSanitizer.java` | `images.ts` | 183 |
+
 ## Phase 18 — agents/ 杂项模块 Batch 2 (10 Java files)
 
 ### Added (runtime/ 包, 7 new files)
