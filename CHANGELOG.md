@@ -1,6 +1,21 @@
 # Changelog
 
-## Phase 9 — Session Management Tools
+## Phase 10 — Runner 运行路径补全
+
+### Added
+- `RunParams` — 运行参数 record + builder（session/sender/model/tool/timeout 等 40+ 字段）
+- `ToolSplit` — 工具分割为 builtIn/custom + ToolDefinition 转换
+- `Lanes` — 并发 lane 管理（session/global/embedded）
+- `AbortUtils` — 取消信号检测（异常链遍历）
+- `ExtraParams` — 供应商参数解析（temperature/maxTokens/cacheRetention）+ OpenRouter 头
+- `ThinkingFallback` — LLM 错误消息解析 + thinking 级别回退
+- `MessagingDedupe` — 消息去重（emoji 剥离 + 子串匹配）
+- `OpenAIHelpers` — OpenAI reasoning 块降级（orphaned signature 清理）
+- `RunImages` — 图片引用检测（路径/file:// URL/媒体附件）+ 文件加载 + sandbox 限制
+- `RunPayloads` — 回复 payload 构建（error/tool-meta/reasoning/answer + 静默/去重过滤）
+- `ExtensionPaths` — 扩展配置解析（上下文窗口/压缩模式/缓存剪枝）
+
+
 
 ### Added
 - `SessionsHelpers` — session key resolution, A2A policy engine, session kind classification, sandbox visibility, agent ID resolution
