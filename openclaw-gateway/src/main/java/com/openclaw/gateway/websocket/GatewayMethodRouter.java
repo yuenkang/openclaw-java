@@ -45,8 +45,18 @@ public class GatewayMethodRouter {
 
     /**
      * Dispatch a JSON-RPC request to the appropriate handler.
+     * Authorization is checked before the handler is invoked.
      */
     public CompletableFuture<Object> dispatch(String method, JsonNode params, GatewayConnection connection) {
+        // Authorize: connected clients are scope-checked
+        if (connection.isConnected()) {
+            var authError = MethodAuthorizer.authorize(method, connection);
+            if (authError != null) {
+                return CompletableFuture.failedFuture(
+                        new SecurityException(authError.getMessage()));
+            }
+        }
+
         MethodHandler handler = methodHandlers.get(method);
         if (handler == null) {
             return CompletableFuture.failedFuture(
