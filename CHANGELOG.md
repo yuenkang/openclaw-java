@@ -1,5 +1,29 @@
 # Changelog
 
+## Phase 18 — agents/ 杂项模块 Batch 1 (12 Java files)
+
+### Added (runtime/ 包, 11 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `UsageUtils.java` | `usage.ts` | 90 |
+| `PiSettings.java` | `pi-settings.ts` | 48 |
+| `ToolCallIdSanitizer.java` | `tool-call-id.ts` | 205 |
+| `SessionSlug.java` | `session-slug.ts` | 84 |
+| `AgentTimeout.java` | `timeout.ts` | 63 |
+| `ShellUtils.java` | `shell-utils.ts` | 130 |
+| `ToolSummaryBuilder.java` | `tool-summaries.ts` | 42 |
+| `AgentIdentityResolver.java` | `identity.ts` | 63 |
+| `TranscriptPolicyResolver.java` | `transcript-policy.ts` | 122 |
+| `ModelsConfigMerger.java` | `models-config.ts` | 160 |
+| `WorkspaceManager.java` | `workspace.ts` | 170 |
+
+### Added (models/ 包, 1 new file)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `SyntheticModels.java` | `synthetic-models.ts` | 96 |
+
 ## Phase 17 — agents/ 剩余子模块 (pi-extensions, schema, cli-runner)
 
 ### Added (extensions/ 包, 7 new files)
