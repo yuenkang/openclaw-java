@@ -94,20 +94,39 @@ public class AgentRunner {
     }
 
     /**
-     * Run a single agent turn (may involve multiple LLM calls with tool use).
+     * Run a single agent turn asynchronously.
      */
-    public CompletableFuture<AgentResult> run(AgentRunContext context) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return executeLoop(context);
-            } catch (Exception e) {
-                log.error("Agent run failed: {}", e.getMessage(), e);
-                return AgentResult.builder()
-                        .success(false)
-                        .error(e.getMessage())
-                        .build();
+    public CompletableFuture<AgentResult> runAsync(AgentRunContext context) {
+        return CompletableFuture.supplyAsync(() -> run(context));
+    }
+
+    /**
+     * Run a single agent turn synchronously (may involve multiple LLM calls with
+     * tool use).
+     */
+    public AgentResult run(AgentRunContext context) {
+        try {
+            // If userMessage is set but not yet in messages, prepend it
+            if (context.getUserMessage() != null && !context.getUserMessage().isBlank()) {
+                if (context.getMessages() == null) {
+                    context.setMessages(new ArrayList<>());
+                }
+                context.getMessages().add(ModelProvider.ChatMessage.builder()
+                        .role("user")
+                        .content(context.getUserMessage())
+                        .build());
             }
-        });
+            return executeLoop(context);
+        } catch (Exception e) {
+            log.error("Agent run failed: {}", e.getMessage(), e);
+            String errorMsg = e.getMessage() != null ? e.getMessage() : e.toString();
+            ErrorClassifier.FailoverReason reason = ErrorClassifier.classifyFailoverReason(errorMsg);
+            return AgentResult.builder()
+                    .success(false)
+                    .error(errorMsg)
+                    .errorKind(reason)
+                    .build();
+        }
     }
 
     private AgentResult executeLoop(AgentRunContext context) {
@@ -214,15 +233,14 @@ public class AgentRunner {
             try {
                 response = provider.chatStream(request, streamListener).join();
             } catch (Exception e) {
-                // Wrap as FailoverError if classifiable
-                FailoverError fe = FailoverError.coerceToFailoverError(
-                        e, null, context.getModelId(), null);
-                String errorMsg = fe != null
-                        ? String.format("LLM call failed [%s]: %s", fe.getReason(), fe.getMessage())
-                        : "LLM call failed: " + e.getMessage();
+                // Classify error for failover / user messaging
+                String rawError = e.getMessage() != null ? e.getMessage() : e.toString();
+                ErrorClassifier.FailoverReason reason = ErrorClassifier.classifyFailoverReason(rawError);
+                String errorMsg = String.format("LLM call failed [%s]: %s", reason.name(), rawError);
                 return AgentResult.builder()
                         .success(false)
                         .error(errorMsg)
+                        .errorKind(reason)
                         .events(events)
                         .build();
             }
@@ -379,10 +397,18 @@ public class AgentRunner {
         private String sessionKey;
         private String agentId;
         private String modelId;
+        /**
+         * Provider id (e.g. "anthropic", "openai"). Extracted from modelId if not set.
+         */
+        private String provider;
         private String systemPrompt;
+        /** User message to prepend to messages list on run start. */
+        private String userMessage;
         private List<ModelProvider.ChatMessage> messages;
         private String cwd;
         private int maxTokens;
+        @Builder.Default
+        private int maxTurns = 25;
         private double temperature;
         private OpenClawConfig config;
         private volatile boolean cancelled;
@@ -391,6 +417,8 @@ public class AgentRunner {
         private boolean compactionEnabled = false;
         @Builder.Default
         private AgentEventListener listener = NOOP_LISTENER;
+
+        public static final AgentEventListener NOOP_LISTENER = AgentRunner.NOOP_LISTENER;
     }
 
     @Data
@@ -401,8 +429,12 @@ public class AgentRunner {
         private boolean success;
         private String finalMessage;
         private String error;
+        /** Classified error kind for failover / user messaging. */
+        private ErrorClassifier.FailoverReason errorKind;
         private List<AgentEvent> events;
         private int turns;
+        /** Aggregated token usage across all LLM calls. */
+        private ModelProvider.Usage totalUsage;
     }
 
     @Data
