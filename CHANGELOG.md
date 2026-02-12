@@ -1,6 +1,20 @@
 # Changelog
 
-## Phase 10 — Runner 运行路径补全
+## Phase 11 — 缺失功能模块
+
+### Added
+- `AgentDefaults` — 默认 provider/model/context-tokens 常量
+- `DateTimeUtils` — 时区解析 + 12/24h 检测 + timestamp 标准化 + 用户时间格式化
+- `AgentContext` — model context window 缓存（线程安全）
+- `AgentStep` — 嵌套 agent 步骤调度（gateway stub）
+- `ChannelTools` — channel 动作枚举 + 工具聚合 + message hints
+- `AnthropicPayloadLog` — JSONL payload/usage 调试日志
+- `CloudflareAIGateway` — CF AI Gateway 常量 + model定义 + URL 构建
+- `BedrockDiscovery` — AWS Bedrock 模型发现 + 缓存（stub SDK）
+- `NodesUtils` — 节点列表解析 + 模糊匹配 + 默认节点选择
+- `ImageToolHelpers` — data URL 解码 + 图片模型配置 + 视觉模型解析
+
+
 
 ### Added
 - `RunParams` — 运行参数 record + builder（session/sender/model/tool/timeout 等 40+ 字段）
