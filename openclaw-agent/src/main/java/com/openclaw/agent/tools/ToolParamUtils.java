@@ -186,4 +186,23 @@ public final class ToolParamUtils {
         node.put("error", error);
         return AgentTool.ToolResult.fail(node.toPrettyString());
     }
+
+    /**
+     * Serialize an object to a pretty-printed JSON string.
+     */
+    public static String toJsonString(Object value) {
+        try {
+            return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            return String.valueOf(value);
+        }
+    }
+
+    /**
+     * Read an integer parameter, returning null if absent.
+     */
+    public static Integer readIntegerParam(JsonNode params, String key) {
+        Number n = readNumberParam(params, key, false);
+        return n != null ? n.intValue() : null;
+    }
 }

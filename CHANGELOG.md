@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-02-12 — Phase 8: 核心 Agent 工具实现
+
+### Added
+- **MessageTool** — 统一消息动作工具 (send/reply/react/delete/pin 等)
+- **MemoryTool** — 关键词搜索 MEMORY.md + memory/*.md
+- **WebFetchTool** — URL 抓取 + SSRF 防护 + HTML→Markdown
+- **ImageTool** — 图片分析 (文件/base64)，vision model stub
+- **CronTool** — 定时任务管理，gateway stub
+- **AgentsListTool** — Agent 列表 (从 config 读取)
+- **NodesTool** — 远程节点交互，gateway stub
+- **CanvasTool** — 画布控制，gateway stub
+- **TtsTool** — 文本转语音 stub
+
+### Changed
+- **ToolParamUtils** — 新增 `toJsonString()` + `readIntegerParam()`
+- **OpenClawToolFactory** — 注册 9 个新工具
+
 ## 2026-02-12 — Phase 7: pi-embedded-runner 运行编排核心
 
 ### Added

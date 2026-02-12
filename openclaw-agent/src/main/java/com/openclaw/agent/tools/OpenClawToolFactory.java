@@ -1,7 +1,6 @@
 package com.openclaw.agent.tools;
 
-import com.openclaw.agent.tools.builtin.GatewayTool;
-import com.openclaw.agent.tools.builtin.SessionStatusTool;
+import com.openclaw.agent.tools.builtin.*;
 import com.openclaw.common.config.OpenClawConfig;
 import lombok.Builder;
 import lombok.Data;
@@ -39,6 +38,10 @@ public class OpenClawToolFactory {
         private String sandboxRoot;
         /** Configuration */
         private OpenClawConfig config;
+        /** Current channel id (for message tool context) */
+        private String currentChannelId;
+        /** Current channel provider (e.g. discord, telegram) */
+        private String currentChannelProvider;
     }
 
     /**
@@ -57,14 +60,35 @@ public class OpenClawToolFactory {
                 options.getSessionKey(),
                 options.getConfig()));
 
-        // --- Web Search (already exists as WebSearchTool, added by caller) ---
-        // The existing WebSearchTool in the tools package should be registered
-        // by the caller or via CodingToolFactory.
+        // --- Message ---
+        tools.add(new MessageTool(
+                options.getCurrentChannelId(),
+                options.getCurrentChannelProvider(),
+                false));
 
-        // --- Future tools (stubs / placeholders) ---
-        // Browser, Canvas, Cron, Nodes, Image, Message, TTS,
-        // Sessions List/History/Send/Spawn, Agents List
-        // These will be implemented as separate tool classes.
+        // --- Memory ---
+        tools.add(new MemoryTool());
+
+        // --- Web Fetch ---
+        tools.add(new WebFetchTool());
+
+        // --- Image ---
+        tools.add(new ImageTool());
+
+        // --- Cron ---
+        tools.add(new CronTool());
+
+        // --- Agents List ---
+        tools.add(new AgentsListTool());
+
+        // --- Nodes ---
+        tools.add(new NodesTool());
+
+        // --- Canvas ---
+        tools.add(new CanvasTool());
+
+        // --- TTS ---
+        tools.add(new TtsTool());
 
         log.debug("Created {} OpenClaw extension tools", tools.size());
         return tools;
