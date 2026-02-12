@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 15 — Sandbox 沙箱子系统
+
+### Added (sandbox/ 包, 12 files, 1797 lines)
+- `SandboxTypes` — 全部类型定义 (Docker/Browser/Prune/ToolPolicy/Context/WorkspaceAccess)
+- `SandboxConstants` — 默认值常量 (images/prefixes/tool allow-deny lists/state 目录)
+- `SandboxShared` — session key slug + scope key 解析 + agent ID 提取
+- `SandboxConfigHash` — SHA-1 配置哈希（标准化 Map/List 后计算，用于变更检测）
+- `SandboxConfigResolver` — 配置合并逻辑（agent→global→default）：Docker/Browser/Prune
+- `SandboxToolPolicyResolver` — 工具策略模式匹配 (wildcard/exact/all) + agent→global→default 解析
+- `SandboxDocker` — Docker CLI 执行 (ProcessBuilder) + 镜像管理 + 容器状态检查 + create-args 构建
+- `SandboxRegistry` — JSON 文件持久化注册表 (容器 + 浏览器) CRUD
+- `SandboxPruner` — 闲置/过期容器自动清理（5 分钟节流）
+- `SandboxRuntimeStatus` — 运行时沙箱决策 + 被阻止工具消息格式化
+- `SandboxPaths` — 路径安全：逃逸检测 + 符号链接阻止 + Unicode 空格归一化
+- `SandboxManager` — 容器列表/删除 + 浏览器桥接内存缓存
+
 ## Phase 12 — Auth Profiles 子系统
 
 ### Added (auth/ 包, 13 files, 1667 lines)
