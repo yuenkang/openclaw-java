@@ -1,6 +1,8 @@
 package com.openclaw.gateway;
 
 import com.openclaw.common.config.ConfigService;
+import com.openclaw.gateway.agent.AgentJobTracker;
+import com.openclaw.gateway.agent.AgentTimestampService;
 import com.openclaw.gateway.auth.AuthService;
 import com.openclaw.gateway.node.DevicePairingService;
 import com.openclaw.gateway.node.NodePairingService;
@@ -94,6 +96,16 @@ public class GatewayBeanConfig {
     @Bean
     public DevicePairingService devicePairingService(ObjectMapper objectMapper) {
         return new DevicePairingService(resolveStateDir(), objectMapper);
+    }
+
+    @Bean
+    public AgentTimestampService agentTimestampService() {
+        return new AgentTimestampService();
+    }
+
+    @Bean
+    public AgentJobTracker agentJobTracker() {
+        return new AgentJobTracker();
     }
 
     private Path resolveStateDir() {
