@@ -36,6 +36,12 @@ public class OpenClawConfig {
     /** Cron/scheduling settings. */
     private CronConfig cron;
 
+    /** Session settings. */
+    private SessionConfig session;
+
+    /** Tools settings. */
+    private ToolsConfig tools;
+
     /** Global sandbox settings. */
     private SandboxConfig sandbox;
 
@@ -131,6 +137,25 @@ public class OpenClawConfig {
 
         /** Allowlist of model keys ("provider/model"). Null means allow any. */
         private List<String> modelAllowlist;
+
+        /** Sandbox defaults for agents. */
+        private SandboxDefaults sandbox;
+
+        /** Subagent defaults. */
+        private SubagentDefaults subagents;
+    }
+
+    @Data
+    public static class SandboxDefaults {
+        /** "spawned" | "all" | "none" */
+        private String sessionToolsVisibility;
+    }
+
+    @Data
+    public static class SubagentDefaults {
+        private String model;
+        private String thinking;
+        private List<String> allowAgents;
     }
 
     @Data
@@ -202,5 +227,32 @@ public class OpenClawConfig {
     @Data
     public static class LoggingConfig {
         private String level = "info";
+    }
+
+    @Data
+    public static class SessionConfig {
+        /** Main session key. */
+        private String mainKey;
+        /** "per-sender" | "global" */
+        private String scope;
+        /** Agent-to-agent session config. */
+        private SessionA2AConfig agentToAgent;
+    }
+
+    @Data
+    public static class SessionA2AConfig {
+        private Integer maxPingPongTurns;
+    }
+
+    @Data
+    public static class ToolsConfig {
+        /** Agent-to-agent tool policy. */
+        private AgentToAgentConfig agentToAgent;
+    }
+
+    @Data
+    public static class AgentToAgentConfig {
+        private Boolean enabled;
+        private List<String> allow;
     }
 }

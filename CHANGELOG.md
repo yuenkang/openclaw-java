@@ -1,5 +1,18 @@
 # Changelog
 
+## Phase 9 — Session Management Tools
+
+### Added
+- `SessionsHelpers` — session key resolution, A2A policy engine, session kind classification, sandbox visibility, agent ID resolution
+- `SessionsSendHelpers` — announce target parsing from session keys, A2A context builders (message/reply/announce), ping-pong turn config
+- `SessionsListTool` — list sessions with kind/limit/activeMinutes filters (gateway stub)
+- `SessionsHistoryTool` — fetch session message history with sanitization (gateway stub)
+- `SessionsSendTool` — cross-session messaging with A2A policy checks, session key/label resolution (gateway stub)
+- `SessionsSpawnTool` — spawn sub-agent in isolated session with model/thinking overrides (gateway stub)
+- `SessionsSendA2ATool` — A2A flow orchestration: ping-pong conversation turns + announce delivery (gateway stub)
+- `OpenClawConfig` extensions: `SessionConfig`, `ToolsConfig`, `AgentToAgentConfig`, `SandboxDefaults`, `SubagentDefaults`
+- Registered all 4 session tools in `OpenClawToolFactory`
+
 ## 2026-02-12 — Phase 8: 核心 Agent 工具实现
 
 ### Added

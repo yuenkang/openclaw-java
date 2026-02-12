@@ -90,6 +90,18 @@ public class OpenClawToolFactory {
         // --- TTS ---
         tools.add(new TtsTool());
 
+        // --- Session Management ---
+        tools.add(new SessionsListTool());
+        tools.add(new SessionsHistoryTool());
+        tools.add(new SessionsSendTool(
+                options.getSessionKey(),
+                options.getCurrentChannelProvider(),
+                options.isSandboxed()));
+        tools.add(new SessionsSpawnTool(
+                options.getSessionKey(),
+                options.getCurrentChannelProvider(),
+                options.isSandboxed()));
+
         log.debug("Created {} OpenClaw extension tools", tools.size());
         return tools;
     }
