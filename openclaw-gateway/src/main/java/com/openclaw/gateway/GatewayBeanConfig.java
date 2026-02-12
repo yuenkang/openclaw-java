@@ -2,6 +2,9 @@ package com.openclaw.gateway;
 
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.gateway.auth.AuthService;
+import com.openclaw.gateway.node.DevicePairingService;
+import com.openclaw.gateway.node.NodePairingService;
+import com.openclaw.gateway.node.NodeRegistry;
 import com.openclaw.gateway.routing.RouteResolver;
 import com.openclaw.gateway.session.SessionStore;
 import com.openclaw.gateway.session.SessionTranscriptStore;
@@ -23,6 +26,8 @@ public class GatewayBeanConfig {
 
     @Value("${openclaw.config.path:~/.openclaw/config.json}")
     private String configPath;
+    @Value("${openclaw.state.dir:~/.openclaw}")
+    private String stateDir;
 
     @Bean
     public ConfigService configService() {
@@ -74,5 +79,28 @@ public class GatewayBeanConfig {
         String home = System.getProperty("user.home");
         return new com.openclaw.gateway.cron.CronService(
                 java.nio.file.Path.of(home, ".openclaw", "cron"));
+    }
+
+    @Bean
+    public NodeRegistry nodeRegistry(ObjectMapper objectMapper) {
+        return new NodeRegistry(objectMapper);
+    }
+
+    @Bean
+    public NodePairingService nodePairingService(ObjectMapper objectMapper) {
+        return new NodePairingService(resolveStateDir(), objectMapper);
+    }
+
+    @Bean
+    public DevicePairingService devicePairingService(ObjectMapper objectMapper) {
+        return new DevicePairingService(resolveStateDir(), objectMapper);
+    }
+
+    private Path resolveStateDir() {
+        String resolved = stateDir;
+        if (resolved.startsWith("~")) {
+            resolved = System.getProperty("user.home") + resolved.substring(1);
+        }
+        return Path.of(resolved);
     }
 }
