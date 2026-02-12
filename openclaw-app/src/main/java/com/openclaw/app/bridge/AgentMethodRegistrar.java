@@ -126,7 +126,7 @@ public class AgentMethodRegistrar {
             });
         }
 
-        return agentRunner.run(context)
+        return agentRunner.runAsync(context)
                 .thenApply(result -> {
                     // End run tracking
                     if (sessionKey != null) {
@@ -174,7 +174,7 @@ public class AgentMethodRegistrar {
                 .config(config)
                 .build();
 
-        return agentRunner.run(context).thenApply(result -> (Object) result);
+        return agentRunner.runAsync(context).thenApply(result -> (Object) result);
     }
 
     // --- Helpers ---
