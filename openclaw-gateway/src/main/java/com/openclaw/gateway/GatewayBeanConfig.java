@@ -4,10 +4,14 @@ import com.openclaw.common.config.ConfigService;
 import com.openclaw.gateway.auth.AuthService;
 import com.openclaw.gateway.routing.RouteResolver;
 import com.openclaw.gateway.session.SessionStore;
+import com.openclaw.gateway.session.SessionTranscriptStore;
+import com.openclaw.gateway.websocket.EventBroadcaster;
 import com.openclaw.gateway.websocket.GatewayMethodRouter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.file.Path;
 
@@ -53,5 +57,15 @@ public class GatewayBeanConfig {
             // Config may not exist yet, that's OK
         }
         return resolver;
+    }
+
+    @Bean
+    public SessionTranscriptStore sessionTranscriptStore(ObjectMapper objectMapper) {
+        return new SessionTranscriptStore(objectMapper);
+    }
+
+    @Bean
+    public EventBroadcaster eventBroadcaster(ObjectMapper objectMapper) {
+        return new EventBroadcaster(objectMapper);
     }
 }

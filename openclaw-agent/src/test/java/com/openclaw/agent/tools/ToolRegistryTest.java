@@ -37,8 +37,10 @@ class ToolRegistryTest {
         registry.register(FileTools.readFile());
         registry.register(FileTools.writeFile());
         registry.register(FileTools.listDir());
+        registry.register(FileTools.grepSearch());
 
-        assertEquals(4, registry.size());
+        assertEquals(5, registry.size());
+        assertTrue(registry.get("grep_search").isPresent());
     }
 
     @Test
