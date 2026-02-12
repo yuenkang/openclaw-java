@@ -46,7 +46,8 @@ public class OpenClawConfig {
 
     @Data
     public static class ModelsConfig {
-        private List<ProviderConfig> providers;
+        /** Provider configs keyed by provider id (e.g. "anthropic", "openai"). */
+        private Map<String, ProviderConfig> providers;
         private List<ModelDefinition> definitions;
     }
 
@@ -63,10 +64,13 @@ public class OpenClawConfig {
         private String id;
         private String name;
         private String provider;
-        private int contextWindow;
+        /** Context window size in tokens (nullable — null means unknown). */
+        private Integer contextWindow;
         private int maxTokens;
         private ModelCost cost;
         private List<String> input;
+        /** Whether the model supports reasoning/thinking. */
+        private Boolean reasoning;
     }
 
     @Data
@@ -81,6 +85,11 @@ public class OpenClawConfig {
     public static class AgentsConfig {
         private List<AgentEntry> list;
         private AgentDefaults defaults;
+
+        /** Convenience: returns list or empty. */
+        public List<AgentEntry> getEntries() {
+            return list != null ? list : List.of();
+        }
     }
 
     @Data
@@ -97,6 +106,24 @@ public class OpenClawConfig {
     public static class AgentDefaults {
         private int maxConcurrent = 3;
         private int subagentMaxConcurrent = 2;
+
+        /** Primary model ref ("provider/model" or just model name). */
+        private String model;
+
+        /** Ordered list of fallback model refs to try when primary fails. */
+        private List<String> modelFallbacks;
+
+        /**
+         * Per-model config map (keyed by "provider/model"). Used for aliases and
+         * allowlists.
+         */
+        private Map<String, Object> models;
+
+        /** Max context tokens cap (overrides model-reported context window). */
+        private Integer contextTokens;
+
+        /** Default thinking level: off | minimal | low | medium | high | xhigh. */
+        private String thinkingDefault;
     }
 
     @Data
