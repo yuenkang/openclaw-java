@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-02-12 — Phase 5A: Model/Provider 基础设施
+
+### Added
+- **ModelCatalogService** — 模型目录缓存 + 多源聚合（providers + config + models.json）
+- **AuthProfileStore** — Auth Profile CRUD + JSON 持久化 + cooldown + round-robin ordering
+- **ProviderConfigPersistence** — models.json 读写 + implicit/explicit provider merge
+- **ModelFallbackRunner** — 异步 fallback 链执行 + 错误分类 + abort 检测
+- `ModelSelector.ModelCatalogEntry` record — 含 vision/reasoning 能力标记
+- `ModelSelector.modelSupportsVision()` / `findModelInCatalog()` / `resolveThinkingDefault()` / `buildAllowedModelSet()`
+- `ModelProviderRegistry.getProvider()` / `listAllModels()` / `registerFromConfig()`
+
+### Changed
+- `ModelSelector.DEFAULT_MODEL` → `claude-opus-4-6`（与 TS `defaults.ts` 对齐）
+- `ModelProviderRegistry.discoverFromEnvironment()` 现在实际创建并注册 provider 实例
+- `OpenClawConfig.ProviderConfig` 新增 `enabled` 字段
+- `OpenClawConfig.AgentDefaults` 新增 `modelAllowlist` 字段
+- `OpenClawConfig.AgentEntry` 新增 `modelFallbacks` 字段
+
 ## 2026-02-12 — Phase 4: TS↔Java RPC 方法差距补齐
 
 ### Added
