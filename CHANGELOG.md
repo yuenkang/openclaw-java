@@ -1,5 +1,27 @@
 # Changelog
 
+## Phase 18 — agents/ 杂项模块 Batch 2 (10 Java files)
+
+### Added (runtime/ 包, 7 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `SandboxPaths.java` | `sandbox-paths.ts` | 155 |
+| `ApplyPatchUpdate.java` | `apply-patch-update.ts` | 196 |
+| `ApplyPatch.java` | `apply-patch.ts` | 316 |
+| `ModelCompat.java` | `model-compat.ts` | 46 |
+| `SessionFileRepair.java` | `session-file-repair.ts` | 120 |
+| `ToolDisplay.java` | `tool-display.ts` | 252 |
+| `WorkspaceTemplates.java` | `workspace-templates.ts` | 72 |
+
+### Added (models/ 包, 3 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `VeniceModels.java` | `venice-models.ts` | 117 |
+| `OpencodeZenModels.java` | `opencode-zen-models.ts` | 163 |
+| `ModelAuth.java` | `model-auth.ts` | 168 |
+
 ## Phase 18 — agents/ 杂项模块 Batch 1 (12 Java files)
 
 ### Added (runtime/ 包, 11 new files)
