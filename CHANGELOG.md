@@ -16,6 +16,46 @@
 - `SandboxPaths` — 路径安全：逃逸检测 + 符号链接阻止 + Unicode 空格归一化
 - `SandboxManager` — 容器列表/删除 + 浏览器桥接内存缓存
 
+## Phase 14.5 — 编译错误修复
+
+### Fixed
+- `openclaw-common/pom.xml` — 添加 Lombok (provided scope) + SLF4J API 依赖，修复 30 个编译错误（`@Data` 注解未处理导致 getter/setter 缺失）
+- `ToolAbortHandler` — 修复 `executeWithAbortCheck()` 中未捕获的 checked Exception
+
+### Result
+- `mvn compile` → BUILD SUCCESS (0 errors)
+
+## Phase 14 — P1 Tool System Extensions
+
+### Added (tools/policy/ 包, 9 files, 1234 lines)
+- `ToolPolicyTypes` — 共享类型 (ToolPolicy/PluginToolGroups/AllowlistResolution)
+- `ToolPolicyUtils` — 名称归一化 + 工具分组 + profile + 插件展开
+- `ToolPolicyMatcher` — 编译模式匹配 + 策略过滤
+- `ToolPolicyResolver` — 有效策略链解析 (global/agent/provider)
+- `ToolSchemaUtils` — JSON Schema 归一化 (anyOf/oneOf 展平 + Gemini 清理)
+- `ToolParamUtils` — Claude Code 参数别名 + 必填参数校验
+- `ToolAbortHandler` — abort 异常 + 执行前检查
+- `ToolBeforeCallHook` — 插件 hook 接口 (stub)
+- `ToolCreator` — 策略解析 + 顺序过滤编排器
+
+## Phase 13 — P0 Core Engine Layer (Embedded Subscribe)
+
+### Added (runtime/subscribe/ 包, 14 files, 2202 lines)
+- `SubscribeTypes` — 订阅系统类型定义
+- `HandlerTypes` — handler 回调类型
+- `EmbeddedSubscribe` — 主入口：消息订阅 + 事件分发
+- `EmbeddedAgent` — 嵌入式 agent 接口
+- `EmbeddedMessaging` — 嵌入式消息传递
+- `EmbeddedUtils` — 嵌入式工具函数
+- `MessageHandlers` — 消息处理器（文本/工具结果/错误）
+- `ToolHandlers` — 工具调用处理器
+- `LifecycleHandlers` — 生命周期处理器（开始/完成/取消）
+- `SubscribeHandlers` — 订阅事件处理器
+- `RawStreamHandler` — 原始流处理器
+- `RunManager` — 运行管理器（启动/停止/状态）
+- `SubscribeToolUtils` — 订阅工具辅助函数
+- `BlockChunker` — 流式内容分块器
+
 ## Phase 12 — Auth Profiles 子系统
 
 ### Added (auth/ 包, 13 files, 1667 lines)
