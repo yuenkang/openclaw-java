@@ -57,6 +57,8 @@ public class OpenClawConfig {
         private String apiBaseUrl;
         private String apiKey;
         private List<ModelDefinition> models;
+        /** Whether this provider is enabled (default true). */
+        private boolean enabled = true;
     }
 
     @Data
@@ -100,6 +102,8 @@ public class OpenClawConfig {
         private String description;
         private String systemPrompt;
         private SandboxConfig sandbox;
+        /** Per-agent fallback model list. */
+        private List<String> modelFallbacks;
     }
 
     @Data
@@ -124,6 +128,9 @@ public class OpenClawConfig {
 
         /** Default thinking level: off | minimal | low | medium | high | xhigh. */
         private String thinkingDefault;
+
+        /** Allowlist of model keys ("provider/model"). Null means allow any. */
+        private List<String> modelAllowlist;
     }
 
     @Data

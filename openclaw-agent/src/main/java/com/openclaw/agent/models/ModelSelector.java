@@ -14,7 +14,21 @@ import java.util.*;
 public class ModelSelector {
 
     public static final String DEFAULT_PROVIDER = "anthropic";
-    public static final String DEFAULT_MODEL = "claude-sonnet-4-20250514";
+    public static final String DEFAULT_MODEL = "claude-opus-4-6";
+    public static final int DEFAULT_CONTEXT_TOKENS = 200_000;
+
+    /**
+     * A model catalog entry with capability metadata.
+     * Corresponds to TypeScript's ModelCatalogEntry.
+     */
+    public record ModelCatalogEntry(
+            String id,
+            String name,
+            String provider,
+            Integer contextWindow,
+            Boolean reasoning,
+            List<String> input) {
+    }
 
     public record ModelRef(String provider, String model) {
         public String key() {
@@ -182,5 +196,81 @@ public class ModelSelector {
         }
         List<String> fallbacks = cfg.getAgents().getDefaults().getModelFallbacks();
         return fallbacks != null ? fallbacks : Collections.emptyList();
+    }
+
+    // =========================================================================
+    // Catalog + Vision + Allowlist + Thinking
+    // =========================================================================
+
+    /**
+     * Check if a model supports image/vision input based on its catalog entry.
+     */
+    public static boolean modelSupportsVision(ModelCatalogEntry entry) {
+        return entry != null && entry.input() != null && entry.input().contains("image");
+    }
+
+    /**
+     * Find a model in the catalog by provider and model ID (case-insensitive).
+     */
+    public static ModelCatalogEntry findModelInCatalog(
+            List<ModelCatalogEntry> catalog, String provider, String modelId) {
+        if (catalog == null || provider == null || modelId == null)
+            return null;
+        String normProvider = provider.toLowerCase().trim();
+        String normModel = modelId.toLowerCase().trim();
+        return catalog.stream()
+                .filter(e -> e.provider().toLowerCase().equals(normProvider)
+                        && e.id().toLowerCase().equals(normModel))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Resolve the default thinking level for a model.
+     * Checks config thinkingDefault, then uses "low" for reasoning models.
+     */
+    public static String resolveThinkingDefault(
+            OpenClawConfig cfg, String provider, String model, List<ModelCatalogEntry> catalog) {
+        // Check explicit config
+        if (cfg != null && cfg.getAgents() != null && cfg.getAgents().getDefaults() != null) {
+            String explicit = cfg.getAgents().getDefaults().getThinkingDefault();
+            if (explicit != null && !explicit.isBlank()) {
+                return explicit.trim().toLowerCase();
+            }
+        }
+        // Default to "low" for reasoning-capable models, "off" otherwise
+        if (catalog != null) {
+            ModelCatalogEntry entry = findModelInCatalog(catalog, provider, model);
+            if (entry != null && Boolean.TRUE.equals(entry.reasoning())) {
+                return "low";
+            }
+        }
+        return "off";
+    }
+
+    /**
+     * Build the set of allowed model keys from config allowlist.
+     * Returns null if no allowlist is configured (meaning any model is allowed).
+     */
+    public static Set<String> buildAllowedModelSet(
+            OpenClawConfig cfg, List<ModelCatalogEntry> catalog) {
+        if (cfg == null || cfg.getAgents() == null || cfg.getAgents().getDefaults() == null) {
+            return null; // no restriction
+        }
+        List<String> allowlist = cfg.getAgents().getDefaults().getModelAllowlist();
+        if (allowlist == null || allowlist.isEmpty()) {
+            return null; // no restriction
+        }
+        Set<String> allowed = new HashSet<>();
+        for (String raw : allowlist) {
+            ModelRef ref = parseModelRef(raw, DEFAULT_PROVIDER);
+            if (ref != null) {
+                allowed.add(ref.key());
+            }
+        }
+        // Always include the configured primary model
+        ModelRef primary = resolveConfiguredModel(cfg);
+        allowed.add(primary.key());
+        return allowed;
     }
 }

@@ -62,6 +62,13 @@ public class ModelProviderRegistry {
     }
 
     /**
+     * Get a provider directly by ID (no alias resolution).
+     */
+    public ModelProvider getProvider(String providerId) {
+        return providers.get(providerId);
+    }
+
+    /**
      * Resolve the full model ID from a potentially aliased name.
      */
     public String resolveModelId(String modelId) {
@@ -71,6 +78,7 @@ public class ModelProviderRegistry {
     /**
      * Auto-discover providers based on environment variables.
      * Corresponds to TypeScript's resolveImplicitProviders().
+     * Creates and registers providers when API keys are found.
      */
     public void discoverFromEnvironment() {
         Map<String, String> env = System.getenv();
@@ -78,17 +86,45 @@ public class ModelProviderRegistry {
         for (Map.Entry<String, String> entry : ENV_VAR_MAP.entrySet()) {
             String providerId = entry.getKey();
             String envVar = entry.getValue();
+            String apiKey = env.get(envVar);
 
-            if (env.containsKey(envVar) && !providers.containsKey(providerId)) {
+            if (apiKey != null && !apiKey.isBlank() && !providers.containsKey(providerId)) {
                 log.info("Auto-discovered provider {} from env var {}", providerId, envVar);
-                // Note: actual provider instances should be registered separately
-                // This just detects availability
+                registerFromEnv(providerId, apiKey);
             }
         }
 
         // Ollama: probe local endpoint
         if (!providers.containsKey("ollama")) {
             discoverOllama();
+        }
+    }
+
+    /**
+     * Register a provider from an environment-supplied API key.
+     */
+    private void registerFromEnv(String providerId, String apiKey) {
+        String baseUrl = switch (providerId) {
+            case "anthropic" -> "https://api.anthropic.com";
+            case "openai" -> "https://api.openai.com/v1";
+            case "google" -> "https://generativelanguage.googleapis.com/v1beta";
+            case "minimax" -> "https://api.minimax.chat/v1";
+            case "moonshot" -> "https://api.moonshot.cn/v1";
+            case "venice" -> "https://api.venice.ai/api/v1";
+            default -> null;
+        };
+        if (baseUrl != null) {
+            try {
+                ModelProvider provider;
+                if ("anthropic".equals(providerId)) {
+                    provider = new AnthropicProvider(apiKey, baseUrl);
+                } else {
+                    provider = new OpenAICompatibleProvider(providerId, apiKey, baseUrl);
+                }
+                register(provider);
+            } catch (Exception e) {
+                log.warn("Failed to register provider {} from env: {}", providerId, e.getMessage());
+            }
         }
     }
 
@@ -139,5 +175,51 @@ public class ModelProviderRegistry {
 
     public int size() {
         return providers.size();
+    }
+
+    /**
+     * Aggregate all models from all registered providers.
+     */
+    public List<ModelProvider.ModelInfo> listAllModels() {
+        List<ModelProvider.ModelInfo> all = new java.util.ArrayList<>();
+        for (ModelProvider provider : providers.values()) {
+            try {
+                all.addAll(provider.listModels());
+            } catch (Exception e) {
+                log.debug("listModels failed for {}: {}", provider.getId(), e.getMessage());
+            }
+        }
+        return all;
+    }
+
+    /**
+     * Create and register a provider from an OpenClawConfig.ProviderConfig.
+     */
+    public void registerFromConfig(String providerId,
+            com.openclaw.common.config.OpenClawConfig.ProviderConfig config) {
+        if (config == null || !config.isEnabled())
+            return;
+        if (providers.containsKey(providerId)) {
+            log.debug("Provider {} already registered, skipping config registration", providerId);
+            return;
+        }
+        String apiKey = config.getApiKey();
+        String baseUrl = config.getApiBaseUrl();
+        if (apiKey == null || apiKey.isBlank())
+            return;
+
+        try {
+            ModelProvider provider;
+            if ("anthropic".equals(providerId)) {
+                provider = new AnthropicProvider(apiKey,
+                        baseUrl != null ? baseUrl : "https://api.anthropic.com");
+            } else {
+                provider = new OpenAICompatibleProvider(providerId, apiKey,
+                        baseUrl != null ? baseUrl : "https://api.openai.com/v1");
+            }
+            register(provider);
+        } catch (Exception e) {
+            log.warn("Failed to register provider {} from config: {}", providerId, e.getMessage());
+        }
     }
 }
