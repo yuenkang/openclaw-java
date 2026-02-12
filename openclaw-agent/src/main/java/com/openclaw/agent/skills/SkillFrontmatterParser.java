@@ -125,7 +125,8 @@ public class SkillFrontmatterParser {
                     textOrNull(meta, "emoji"),
                     textOrNull(meta, "homepage"),
                     stringList(meta, "os"),
-                    resolveRequires(meta));
+                    resolveRequires(meta),
+                    null);
         } catch (Exception e) {
             log.debug("Failed to parse skill metadata: {}", e.getMessage());
             return null;

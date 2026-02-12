@@ -228,7 +228,8 @@ public class SkillLoader {
                         e.skill().name(),
                         e.metadata() != null ? e.metadata().primaryEnv() : null))
                 .toList();
-        return new SkillSnapshot(prompt, summaries, 1);
+        List<Skill> resolvedSkills = entries.stream().map(SkillEntry::skill).toList();
+        return new SkillSnapshot(prompt, summaries, resolvedSkills, 1);
     }
 
     // =========================================================================

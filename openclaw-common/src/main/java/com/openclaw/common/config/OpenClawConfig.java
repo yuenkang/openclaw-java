@@ -48,6 +48,12 @@ public class OpenClawConfig {
     /** Logging settings. */
     private LoggingConfig logging;
 
+    /** Skills settings. */
+    private SkillsConfig skills;
+
+    /** Plugins settings. */
+    private Map<String, Object> plugins;
+
     // --- Nested config types ---
 
     @Data
@@ -254,5 +260,25 @@ public class OpenClawConfig {
     public static class AgentToAgentConfig {
         private Boolean enabled;
         private List<String> allow;
+    }
+
+    @Data
+    public static class SkillsConfig {
+        /** Per-skill config entries keyed by skill key. */
+        private Map<String, Object> entries;
+        /** Bundled skills allowlist (null = allow all). */
+        private Object allowBundled;
+        /** Load/watch settings. */
+        private SkillLoadConfig load;
+    }
+
+    @Data
+    public static class SkillLoadConfig {
+        /** Whether to watch for skill file changes (default true). */
+        private Boolean watch;
+        /** Debounce ms for watch events. */
+        private Long watchDebounceMs;
+        /** Extra skill directories to load from. */
+        private List<String> extraDirs;
     }
 }
