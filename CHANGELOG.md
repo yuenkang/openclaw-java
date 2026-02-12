@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 18 — pi-embedded-runner/ Batch 4 (12 Java files)
+
+### Added (runner/ 包, 12 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `RunnerTypes.java` | `types.ts` | 105 |
+| `RunnerUtils.java` | `utils.ts` | 40 |
+| `AbortDetector.java` | `abort.ts` | 34 |
+| `CacheTtl.java` | `cache-ttl.ts` | 60 |
+| `HistoryLimiter.java` | `history.ts` | 98 |
+| `RunnerLanes.java` | `lanes.ts` | 32 |
+| `RunnerLogger.java` | `logger.ts` | 15 |
+| `SandboxInfoBuilder.java` | `sandbox-info.ts` | 60 |
+| `ToolSplitter.java` | `tool-split.ts` | 28 |
+| `ExtraParams.java` | `extra-params.ts` | 128 |
+| `RunnerModel.java` | `model.ts` | 105 |
+| `SessionManagerSetup.java` | `session-manager-{cache,init}.ts` | 130 |
+
 ## Phase 18 — pi-embedded-helpers/ Batch 3 (9 Java files)
 
 ### Added (embedded/ 包, 9 new files)
