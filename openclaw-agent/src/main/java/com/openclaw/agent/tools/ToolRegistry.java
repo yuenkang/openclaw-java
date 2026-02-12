@@ -76,4 +76,30 @@ public class ToolRegistry {
     public int size() {
         return tools.size();
     }
+
+    /**
+     * Filter tools by a ToolPolicy, returning a new list of allowed tools.
+     */
+    public List<AgentTool> filterByPolicy(ToolPolicy policy) {
+        if (policy == null || policy == ToolPolicy.ALLOW_ALL) {
+            return listAll();
+        }
+        List<AgentTool> filtered = new ArrayList<>();
+        for (AgentTool tool : tools.values()) {
+            if (policy.isAllowed(tool.getName())) {
+                filtered.add(tool);
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * Convert tools to provider-specific format (via ToolDefinitionAdapter).
+     *
+     * @param provider provider name (anthropic, openai, google)
+     * @return formatted tool definitions
+     */
+    public List<Map<String, Object>> toProviderDefinitions(String provider) {
+        return ToolDefinitionAdapter.toProviderFormat(listAll(), provider);
+    }
 }
