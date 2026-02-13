@@ -43,6 +43,11 @@ public class ExtendedMethodRegistrar {
      */
     private final Map<String, UsageRecord> usageBySession = new ConcurrentHashMap<>();
 
+    /**
+     * Per-session usage log: sessionId -> list of individual request entries.
+     */
+    private final Map<String, List<UsageLogEntry>> usageLogs = new ConcurrentHashMap<>();
+
     public ExtendedMethodRegistrar(
             GatewayMethodRouter methodRouter,
             ConfigService configService,
@@ -66,6 +71,8 @@ public class ExtendedMethodRegistrar {
         methodRouter.registerMethod("usage.status", this::handleUsageStatus);
         methodRouter.registerMethod("usage.cost", this::handleUsageCost);
         methodRouter.registerMethod("sessions.usage", this::handleSessionsUsage);
+        methodRouter.registerMethod("sessions.usage.timeseries", this::handleSessionsUsageTimeseries);
+        methodRouter.registerMethod("sessions.usage.logs", this::handleSessionsUsageLogs);
 
         // Logs
         methodRouter.registerMethod("logs.tail", this::handleLogsTail);
@@ -187,6 +194,31 @@ public class ExtendedMethodRegistrar {
                     existing.outputTokens + outputTokens,
                     existing.cost + cost);
         });
+
+        // Record individual log entry
+        usageLogs.computeIfAbsent(sessionId, k -> Collections.synchronizedList(new ArrayList<>()))
+                .add(new UsageLogEntry(
+                        System.currentTimeMillis(),
+                        inputTokens,
+                        outputTokens,
+                        cost,
+                        null // modelId populated by caller if available
+                ));
+    }
+
+    /**
+     * Record token usage for a session with model information.
+     */
+    public void recordUsage(String sessionId, String modelId,
+            int inputTokens, int outputTokens, double cost) {
+        recordUsage(sessionId, inputTokens, outputTokens, cost);
+        // Override last log entry with model id
+        var logs = usageLogs.get(sessionId);
+        if (logs != null && !logs.isEmpty()) {
+            var last = logs.get(logs.size() - 1);
+            logs.set(logs.size() - 1, new UsageLogEntry(
+                    last.timestampMs, last.inputTokens, last.outputTokens, last.cost, modelId));
+        }
     }
 
     /**
@@ -275,6 +307,96 @@ public class ExtendedMethodRegistrar {
         return CompletableFuture.completedFuture(result);
     }
 
+    /**
+     * sessions.usage.timeseries — Return daily model usage for a session.
+     * Corresponds to TypeScript's sessions.usage.timeseries handler.
+     */
+    private CompletableFuture<Object> handleSessionsUsageTimeseries(JsonNode params, GatewayConnection conn) {
+        String sessionId = resolveSessionId(params);
+        if (sessionId == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("sessionId or key is required"));
+        }
+
+        var logs = usageLogs.getOrDefault(sessionId, Collections.emptyList());
+
+        // Bucket by date string (yyyy-MM-dd)
+        Map<String, Map<String, Object>> dailyBuckets = new LinkedHashMap<>();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        for (UsageLogEntry entry : logs) {
+            String day = java.time.Instant.ofEpochMilli(entry.timestampMs)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(fmt);
+
+            dailyBuckets.compute(day, (k, existing) -> {
+                if (existing == null) {
+                    Map<String, Object> bucket = new LinkedHashMap<>();
+                    bucket.put("date", day);
+                    bucket.put("inputTokens", (long) entry.inputTokens);
+                    bucket.put("outputTokens", (long) entry.outputTokens);
+                    bucket.put("costUsd", entry.cost);
+                    bucket.put("requests", 1);
+                    return bucket;
+                }
+                existing.put("inputTokens", (long) existing.get("inputTokens") + entry.inputTokens);
+                existing.put("outputTokens", (long) existing.get("outputTokens") + entry.outputTokens);
+                existing.put("costUsd", (double) existing.get("costUsd") + entry.cost);
+                existing.put("requests", (int) existing.get("requests") + 1);
+                return existing;
+            });
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ok", true);
+        result.put("sessionId", sessionId);
+        result.put("timeseries", new ArrayList<>(dailyBuckets.values()));
+        return CompletableFuture.completedFuture(result);
+    }
+
+    /**
+     * sessions.usage.logs — Return per-request cost log entries for a session.
+     * Corresponds to TypeScript's sessions.usage.logs handler.
+     */
+    private CompletableFuture<Object> handleSessionsUsageLogs(JsonNode params, GatewayConnection conn) {
+        String sessionId = resolveSessionId(params);
+        if (sessionId == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("sessionId or key is required"));
+        }
+
+        int limit = params.has("limit") ? Math.max(1, params.get("limit").asInt(100)) : 100;
+        int offset = params.has("offset") ? Math.max(0, params.get("offset").asInt(0)) : 0;
+
+        var logs = usageLogs.getOrDefault(sessionId, Collections.emptyList());
+        int total = logs.size();
+
+        // Paginate (most recent first)
+        List<Map<String, Object>> entries = new ArrayList<>();
+        int start = Math.max(0, total - offset - limit);
+        int end = Math.max(0, total - offset);
+        for (int i = end - 1; i >= start; i--) {
+            var entry = logs.get(i);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("timestampMs", entry.timestampMs);
+            row.put("inputTokens", entry.inputTokens);
+            row.put("outputTokens", entry.outputTokens);
+            row.put("costUsd", Math.round(entry.cost * 10000.0) / 10000.0);
+            if (entry.modelId != null) {
+                row.put("modelId", entry.modelId);
+            }
+            entries.add(row);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ok", true);
+        result.put("sessionId", sessionId);
+        result.put("total", total);
+        result.put("offset", offset);
+        result.put("limit", limit);
+        result.put("entries", entries);
+        return CompletableFuture.completedFuture(result);
+    }
+
     // ========================================
     // Logs
     // ========================================
@@ -328,6 +450,21 @@ public class ExtendedMethodRegistrar {
     // ========================================
 
     /**
+     * Resolve session ID from either "sessionId" or "key" params.
+     */
+    private String resolveSessionId(JsonNode params) {
+        if (params.has("sessionId") && !params.get("sessionId").isNull()) {
+            return params.get("sessionId").asText();
+        }
+        if (params.has("key") && !params.get("key").isNull()) {
+            String key = params.get("key").asText();
+            var session = sessionStore.findBySessionKey(key);
+            return session.map(s -> s.getSessionId()).orElse(null);
+        }
+        return null;
+    }
+
+    /**
      * JSON Merge Patch (RFC 7396) implementation.
      */
     private JsonNode mergePatch(ObjectNode target, JsonNode patch) {
@@ -354,5 +491,12 @@ public class ExtendedMethodRegistrar {
      * Simple in-memory usage record.
      */
     private record UsageRecord(long inputTokens, long outputTokens, double cost) {
+    }
+
+    /**
+     * Individual usage log entry for timeseries and logs.
+     */
+    private record UsageLogEntry(long timestampMs, int inputTokens, int outputTokens,
+            double cost, String modelId) {
     }
 }
