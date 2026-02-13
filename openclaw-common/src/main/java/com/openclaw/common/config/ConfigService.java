@@ -151,7 +151,7 @@ public class ConfigService {
             config.setAgents(new OpenClawConfig.AgentsConfig());
         }
         if (config.getAgents().getDefaults() == null) {
-            config.getAgents().setDefaults(new OpenClawConfig.AgentDefaults());
+            config.getAgents().setDefaults(new OpenClawConfig.AgentDefaultsConfig());
         }
         return config;
     }
