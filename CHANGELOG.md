@@ -1,5 +1,27 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 12: auto-reply root directory (13 Java files, 2129 lines)
+
+### Added (autoreply/ 包, 13 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `Reply.java` | `reply.ts` | 21 |
+| `CommandDetection.java` | `command-detection.ts` | 57 |
+| `Dispatch.java` | `dispatch.ts` | 65 |
+| `Heartbeat.java` | `heartbeat.ts` | 134 |
+| `Templating.java` | `templating.ts` | 52 |
+| `SkillCommands.java` | `skill-commands.ts` | 107 |
+| `CommandAuth.java` | `command-auth.ts` | 95 |
+| `Envelope.java` | `envelope.ts` | 155 |
+| `CommandsRegistryTypes.java` | `commands-registry.types.ts` | 77 |
+| `CommandsRegistryData.java` | `commands-registry.data.ts` | 293 |
+| `CommandsRegistry.java` | `commands-registry.ts` | 216 |
+| `Chunk.java` | `chunk.ts` | 203 |
+| `Status.java` | `status.ts` | 316 |
+
+Phase 19 累计 ~120/121 文件（~14992 行）。auto-reply 目录翻译完成 ✅
+
 ## Phase 19 — Auto-Reply Batch 11: agent-runner-execution + get-reply-* pipeline (6 Java files, 1148 lines)
 
 ### Added (autoreply/reply/ 包, 6 new files)
