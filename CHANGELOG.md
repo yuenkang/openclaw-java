@@ -1,5 +1,44 @@
 # Changelog
 
+## Phase 20 — Gateway Batch 4: Root Gateway 文件 (11 Java files)
+
+### Added
+
+**chat/ (5 files) — Group A: Chat 事件处理**
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `ChatRunRegistry.java` | `server-chat.ts` createChatRunRegistry | 95 |
+| `ChatRunState.java` | `server-chat.ts` createChatRunState | 51 |
+| `AgentEventHandler.java` | `server-chat.ts` createAgentEventHandler | 275 |
+| `ToolEventRecipientRegistry.java` | `server-chat.ts` tool-verbose 订阅 | 45 |
+| `AgentEventPayload.java` | agent event DTO | 60 |
+
+**session/ (3 files) — Group B: Session 实用工具**
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `SessionUtils.java` | `session-utils.ts` (725 行, 26 函数) | 337 |
+| `SessionPatchService.java` | `sessions-patch.ts` (341 行) | 158 |
+| `SessionResolveService.java` | `sessions-resolve.ts` (140 行) | 124 |
+
+**config/ + hooks/ + openai/ (3 files) — Group C**
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `ConfigReloadService.java` | `config-reload.ts` (389 行) | 173 |
+| `HooksService.java` | `hooks.ts` + `hooks-mapping.ts` (673 行) | 210 |
+| `OpenAiHttpHandler.java` | `openai-http.ts` (427 行) | 230 |
+
+## Phase 20 — Gateway Batch 3: server-methods/ 补全 (2 files, 269 lines)
+
+### Added / Modified
+
+| Java 文件 | 说明 | 行数 |
+|-----------|------|------|
+| `CoreMethodRegistrar.java` | 补充 `agent.*` 方法注册 | +126 |
+| `ExtendedMethodRegistrar.java` | 新增 `sessions.usage.timeseries` / `sessions.usage.logs` | 144 |
+
 ## Phase 20 — Gateway Batch 2: protocol/ root + server/ (12 Java files, 744 lines)
 
 ### Added
