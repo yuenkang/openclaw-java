@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 21 — Config Batch 5: Session 配置 + 杂项工具 (9 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `SessionReset.java` | `sessions/reset.ts` (171 行) | session 重置策略（daily/idle）、freshness 评估、thread/group 检测 |
+| `SessionPaths.java` | `sessions/paths.ts` (78 行) | agent session 目录、transcript 路径、store 路径解析 |
+| `SessionGroupKey.java` | `sessions/group.ts` (113 行) | 群组 session key 解析、display name 构建 |
+| `MainSessionKey.java` | `sessions/main-session.ts` (80 行) | 主 session key 解析、alias 规范化、agent ID 提取 |
+| `MarkdownTableModeResolver.java` | `markdown-tables.ts` (69 行) | per-channel/account Markdown 表格模式解析 |
+| `TalkApiKey.java` | `talk.ts` (50 行) | ElevenLabs API key 解析（env + profile） |
+| `ConfigLogging.java` | `logging.ts` (19 行) | 配置路径格式化、更新日志 |
+| `NormalizeConfigPaths.java` | `normalize-paths.ts` (74 行) | 配置中 ~ 路径的规范化 |
+| `ConfigEnvVars.java` | `env-vars.ts` (32 行) | 从配置中收集环境变量 |
+
 ## Phase 21 — Config Batch 4: Agent/Channel 工具 (7 Java files)
 
 ### Added
