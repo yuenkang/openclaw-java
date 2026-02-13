@@ -1,5 +1,62 @@
 # Changelog
 
+## Phase 23 — Channels Batch 2: Telegram 适配器 + Discord 适配器 (30 Java files, +2903 lines)
+
+### Batch 1 — Discord + Telegram Token & Accounts
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `DiscordToken.java` | `discord/token.ts` | bot token 解析，Bot 前缀剥离 |
+| `DiscordAccounts.java` | `discord/accounts.ts` | 多账号枚举、配置合并 |
+| `TelegramToken.java` | `telegram/token.ts` | token 解析（env/tokenFile/config） |
+| `TelegramAccounts.java` | `telegram/accounts.ts` | 多账号、normalized key 回退、implicit token 回退 |
+
+### Batch 2 — Targets + Format
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `DiscordTargets.java` | `discord/targets.ts` | mention/prefix/ID 解析 + 歧义处理 |
+| `DiscordChunk.java` | `discord/chunk.ts` | 文本分块，代码围栏平衡，推理斜体 |
+| `TelegramTargets.java` | `telegram/targets.ts` | chatId + topic/thread 解析 |
+| `TelegramFormat.java` | `telegram/format.ts` | HTML 转义和格式化工具 |
+| `TelegramCaption.java` | `telegram/caption.ts` | caption 分割（1024 字符限制） |
+| `TelegramDraftChunking.java` | `telegram/draft-chunking.ts` | draft streaming 分块配置解析 |
+
+### Batch 3-4 — Discord + Telegram Send System
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `DiscordSendTypes.java` | `discord/send-types.ts` | 15+ 操作 record、常量、SendError 类 |
+| `DiscordSendUtils.java` | `discord/send-utils.ts` | emoji 规范化、收件人解析、sticker/权限工具 |
+| `TelegramSend.java` | `telegram/send.ts` | send/react/delete/edit 选项 record、chatId 规范化 |
+
+### Batch 5-6 — API Tools + Bot Basics
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `DiscordApi.java` | `discord/api.ts` | API 错误类型、rate-limit 检测 |
+| `DiscordMonitorFormat.java` | `discord/monitor-format.ts` | 系统位置、用户标签、emoji 格式化 |
+| `DiscordPluralKit.java` | `discord/pluralkit.ts` | PluralKit 集成类型 |
+| `TelegramNetworkErrors.java` | `telegram/network-errors.ts` | 可恢复网络错误分类（cause-chain walk） |
+| `TelegramReactionLevel.java` | `telegram/reaction-level.ts` | OFF/ACK/MINIMAL/EXTENSIVE 级别解析 |
+| `TelegramSentMessageCache.java` | `telegram/sent-message-cache.ts` | 并发 TTL cache（own-message 检测） |
+| `TelegramBotTypes.java` | `telegram/bot/types.ts` | StreamMode enum 和 StickerMetadata record |
+
+### Batch 7-8 — Monitor, Threading, Sticker & Button Utils
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `DiscordAudit.java` | `discord/audit.ts` | channel 权限审计类型 |
+| `DiscordAllowList.java` | `discord/allow-list.ts` | slug 规范化、ID/name 匹配、群组策略 |
+| `DiscordPresenceCache.java` | `discord/presence-cache.ts` | 并发 per-account 用户在线状态缓存 |
+| `DiscordThreading.java` | `discord/threading.ts` | thread 类型常量、名称清理、reply 目标解析 |
+| `DiscordSenderIdentity.java` | `discord/sender-identity.ts` | PluralKit 归因和用户身份 |
+| `TelegramStickerCache.java` | `telegram/sticker-cache.ts` | 并发 sticker 缓存 + 模糊搜索 |
+| `TelegramVoice.java` | `telegram/voice.ts` | 语音消息兼容性检查 |
+| `TelegramModelButtons.java` | `telegram/model-buttons.ts` | 模型选择键盘 + 分页（sealed interface） |
+| `TelegramInlineButtons.java` | `telegram/inline-buttons.ts` | inline buttons scope enum |
+| `TelegramUpdateOffsetStore.java` | `telegram/update-offset-store.ts` | polling offset 原子文件持久化 |
+
 ## Phase 22 — Channels Batch 1: 类型定义 + 简单工具 (9 Java files)
 
 ### Added
