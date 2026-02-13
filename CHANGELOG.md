@@ -1,5 +1,17 @@
 # Changelog
 
+## Phase 21 — Config Batch 2: 核心配置逻辑 (5 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `ConfigPaths.java` | `paths.ts` (254 行) + `config-paths.ts` (91 行) | 302 |
+| `ConfigDefaults.java` | `defaults.ts` (470 行) | 303 |
+| `EnvSubstitution.java` | `env-substitution.ts` (135 行) + `env-vars.ts` (32 行) | 174 |
+| `ConfigNormalizer.java` | `normalize-paths.ts` (74 行) | 90 |
+| `ConfigOverrides.java` | `runtime-overrides.ts` (77 行) | 100 |
+
 ## Phase 21 — Config Batch 1: 类型补全 (OpenClawConfig.java 重写)
 
 ### Modified
