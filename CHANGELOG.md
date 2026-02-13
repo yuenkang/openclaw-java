@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 10: agent-runner + bash + model-selection + get-reply (10 Java files, 1591 lines)
+
+### Added (autoreply/reply/ 包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `AudioTags.java` | `audio-tags.ts` | 16 |
+| `Exec.java` | `exec.ts` | 15 |
+| `AgentRunnerHelpers.java` | `agent-runner-helpers.ts` | 127 |
+| `AgentRunnerPayloads.java` | `agent-runner-payloads.ts` | 150 |
+| `AgentRunnerUtils.java` | `agent-runner-utils.ts` | 138 |
+| `AgentRunnerMemory.java` | `agent-runner-memory.ts` | 100 |
+| `FollowupRunner.java` | `followup-runner.ts` | 145 |
+| `BashCommand.java` | `bash-command.ts` | 239 |
+| `ModelSelection.java` | `model-selection.ts` | 314 |
+| `GetReply.java` | `get-reply.ts` | 159 |
+
+Phase 19 累计 101/121 文件（~11715 行）。
+
 ## Phase 19 — Auto-Reply Batch 9: session + history + dispatch + allowlist (10 Java files, 1756 lines)
 
 ### Added (autoreply/reply/ 包, 10 new files)
