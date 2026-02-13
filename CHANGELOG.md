@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 21 — Config Batch 6: 版本 + Overrides + IO (3 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `OpenClawVersion.java` | `version.ts` (50 行) | 版本号解析 (`parse`)、比较 (`compare`) |
+| `ConfigRuntimeOverrides.java` | `runtime-overrides.ts` (77 行) | 运行时 config 覆写 (set/unset/get/reset/apply) |
+| `ConfigIO.java` | `io.ts` (615 行, 部分) | SHA-256 hash、JSON 解析、版本戳、备份轮转、cache TTL |
+
 ## Phase 21 — Config Batch 5: Session 配置 + 杂项工具 (9 Java files)
 
 ### Added
