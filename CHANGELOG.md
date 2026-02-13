@@ -1,5 +1,20 @@
 # Changelog
 
+## Phase 20 — Batch 4 Group D: Gateway 其它文件 (8 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 包 |
+|-----------|-----------|-----|
+| `GatewayConstants.java` | `server-constants.ts` (34 行) | `chat` |
+| `ChatAbortController.java` | `chat-abort.ts` (115 行) | `chat` |
+| `ChatAttachmentParser.java` | `chat-attachments.ts` (189 行) | `chat` |
+| `ChatSanitizer.java` | `chat-sanitize.ts` (123 行) | `chat` |
+| `OriginChecker.java` | `origin-check.ts` (85 行) | `net` |
+| `AssistantIdentityResolver.java` | `assistant-identity.ts` (133 行) | `agent` |
+| `ExecApprovalManager.java` | `exec-approval-manager.ts` (82 行) | `server` |
+| `GatewayBroadcaster.java` | `server-broadcast.ts` (120 行) | `server` |
+
 ## Phase 21 — Config Batch 2: 核心配置逻辑 (5 Java files)
 
 ### Added
