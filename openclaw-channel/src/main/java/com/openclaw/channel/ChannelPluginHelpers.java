@@ -22,7 +22,7 @@ public final class ChannelPluginHelpers {
     public static String resolveDefaultAccountId(ChannelPluginDef plugin,
             java.util.List<String> accountIds) {
         if (accountIds != null && !accountIds.isEmpty()) {
-            return accountIds.getFirst();
+            return accountIds.get(0);
         }
         return DEFAULT_ACCOUNT_ID;
     }
