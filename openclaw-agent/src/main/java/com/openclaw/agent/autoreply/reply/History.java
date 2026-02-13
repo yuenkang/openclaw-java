@@ -130,11 +130,11 @@ public final class History {
         return buildHistoryContextFromEntries(entries, currentMessage, formatEntry, lineBreak, excludeLast);
     }
 
-    /** Clear history for a key. */
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     public static void clearHistoryEntries(
             LinkedHashMap<String, ? extends List<?>> historyMap,
             String historyKey) {
-        historyMap.put(historyKey, (List) new ArrayList<>());
+        ((LinkedHashMap) historyMap).put(historyKey, new ArrayList<>());
     }
 
     /** Conditional clear. */

@@ -156,10 +156,9 @@ public class GatewayBroadcaster {
             if (!hasEventScope(c, event))
                 continue;
 
-            boolean slow = c.session().isOpen()
-                    && c.session().getBufferSize() > GatewayConstants.MAX_BUFFERED_BYTES;
-            if (slow && opts.dropIfSlow())
-                continue;
+            // Note: Spring WebSocketSession doesn't expose buffer size;
+            // slow consumer detection is not yet supported
+            boolean slow = false;
             if (slow) {
                 try {
                     c.session().close();

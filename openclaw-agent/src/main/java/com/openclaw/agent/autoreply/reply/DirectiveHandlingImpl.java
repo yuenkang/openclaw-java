@@ -113,7 +113,7 @@ public final class DirectiveHandlingImpl {
             if (directives.elevatedLevel() == null && directives.rawElevatedLevel() == null) {
                 if (!elevatedEnabled || !elevatedAllowed) {
                     return done(Map.of("text",
-                            DirectiveHandlingShared.formatElevatedUnavailableText(false)));
+                            DirectiveHandlingShared.formatElevatedUnavailableText(false, List.of(), null)));
                 }
                 String level = currentElevatedLevel != null ? currentElevatedLevel : "off";
                 return done(Map.of("text",
@@ -130,7 +130,7 @@ public final class DirectiveHandlingImpl {
 
         if (directives.hasElevatedDirective() && (!elevatedEnabled || !elevatedAllowed)) {
             return done(Map.of("text",
-                    DirectiveHandlingShared.formatElevatedUnavailableText(false)));
+                    DirectiveHandlingShared.formatElevatedUnavailableText(false, List.of(), null)));
         }
 
         // Persist levels

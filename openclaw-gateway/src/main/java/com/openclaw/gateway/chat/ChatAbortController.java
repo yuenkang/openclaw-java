@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Chat abort controller — manages abort signals for active chat runs.
@@ -17,16 +18,57 @@ public class ChatAbortController {
 
     /**
      * Tracks an active chat run's abort controller state.
+     * Uses AtomicBoolean for thread-safe mutable abort flag
+     * (record components cannot be volatile/mutable).
      */
-    public record AbortEntry(
-            String runId,
-            String sessionId,
-            String sessionKey,
-            long startedAtMs,
-            long expiresAtMs,
-            volatile boolean aborted) {
+    public static class AbortEntry {
+        private final String runId;
+        private final String sessionId;
+        private final String sessionKey;
+        private final long startedAtMs;
+        private final long expiresAtMs;
+        private final AtomicBoolean aborted;
+
         public AbortEntry(String runId, String sessionId, String sessionKey, long startedAtMs, long expiresAtMs) {
             this(runId, sessionId, sessionKey, startedAtMs, expiresAtMs, false);
+        }
+
+        public AbortEntry(String runId, String sessionId, String sessionKey,
+                long startedAtMs, long expiresAtMs, boolean aborted) {
+            this.runId = runId;
+            this.sessionId = sessionId;
+            this.sessionKey = sessionKey;
+            this.startedAtMs = startedAtMs;
+            this.expiresAtMs = expiresAtMs;
+            this.aborted = new AtomicBoolean(aborted);
+        }
+
+        public String runId() {
+            return runId;
+        }
+
+        public String sessionId() {
+            return sessionId;
+        }
+
+        public String sessionKey() {
+            return sessionKey;
+        }
+
+        public long startedAtMs() {
+            return startedAtMs;
+        }
+
+        public long expiresAtMs() {
+            return expiresAtMs;
+        }
+
+        public boolean aborted() {
+            return aborted.get();
+        }
+
+        public void setAborted(boolean value) {
+            aborted.set(value);
         }
     }
 

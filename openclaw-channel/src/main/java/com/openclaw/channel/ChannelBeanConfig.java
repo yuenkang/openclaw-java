@@ -44,21 +44,37 @@ public class ChannelBeanConfig {
         MessageDeliveryService service = new MessageDeliveryService(channelDock);
 
         // Auto-register Telegram if bot token is configured
+        String tgToken = null;
+
+        // 1) Try config providers map
         try {
             OpenClawConfig config = configService.loadConfig();
-            if (config.getChannels() != null && config.getChannels().getConfig() != null) {
-                OpenClawConfig.ChannelConfig tgConfig = config.getChannels().getConfig().get("telegram");
-                if (tgConfig != null && tgConfig.getBotToken() != null) {
-                    service.registerAdapter(new TelegramOutboundAdapter(tgConfig.getBotToken()));
+            if (config.getChannels() != null && config.getChannels().getProviders() != null) {
+                Object tgProvider = config.getChannels().getProviders().get("telegram");
+                if (tgProvider instanceof java.util.Map) {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> tgMap = (java.util.Map<String, Object>) tgProvider;
+                    Object token = tgMap.get("botToken");
+                    if (token == null)
+                        token = tgMap.get("token");
+                    if (token instanceof String s && !s.isBlank()) {
+                        tgToken = s;
+                    }
                 }
             }
         } catch (Exception e) {
             log.debug("No Telegram config found: {}", e.getMessage());
         }
 
-        // Also check env variable
-        String tgToken = System.getenv("TELEGRAM_BOT_TOKEN");
-        if (tgToken != null && !tgToken.isBlank() && !service.hasAdapter("telegram")) {
+        // 2) Fallback to env variable
+        if (tgToken == null) {
+            String envToken = System.getenv("TELEGRAM_BOT_TOKEN");
+            if (envToken != null && !envToken.isBlank()) {
+                tgToken = envToken;
+            }
+        }
+
+        if (tgToken != null) {
             service.registerAdapter(new TelegramOutboundAdapter(tgToken));
         }
 

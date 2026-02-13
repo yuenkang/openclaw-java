@@ -92,7 +92,7 @@ public class ModelCatalogService {
             if (config != null && config.getModels() != null) {
                 if (config.getModels().getDefinitions() != null) {
                     for (OpenClawConfig.ModelDefinition def : config.getModels().getDefinitions()) {
-                        String provider = def.getProvider() != null ? def.getProvider() : "unknown";
+                        String provider = def.getApi() != null ? def.getApi() : "unknown";
                         String key = provider + "/" + def.getId();
                         if (seen.add(key)) {
                             models.add(new ModelCatalogEntry(

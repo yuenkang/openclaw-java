@@ -151,7 +151,7 @@ public class ConfigReloadService implements AutoCloseable {
      */
     static ConfigDiff computeDiff(OpenClawConfig oldCfg, OpenClawConfig newCfg) {
         Set<String> changed = new LinkedHashSet<>();
-        if (!Objects.equals(oldCfg.getModel(), newCfg.getModel()))
+        if (!Objects.equals(oldCfg.getModels(), newCfg.getModels()))
             changed.add("model");
         if (!Objects.equals(oldCfg.getAgents(), newCfg.getAgents()))
             changed.add("agents");
@@ -167,8 +167,7 @@ public class ConfigReloadService implements AutoCloseable {
             changed.add("cron");
         if (!Objects.equals(oldCfg.getTools(), newCfg.getTools()))
             changed.add("tools");
-        if (!Objects.equals(oldCfg.getSandbox(), newCfg.getSandbox()))
-            changed.add("sandbox");
+        // sandbox config is per-agent, not top-level
         if (!Objects.equals(oldCfg.getLogging(), newCfg.getLogging()))
             changed.add("logging");
         if (!Objects.equals(oldCfg.getPlugins(), newCfg.getPlugins()))

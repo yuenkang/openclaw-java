@@ -43,7 +43,7 @@ public class ToolPolicy {
         if (cfg == null || cfg.getSandbox() == null || cfg.getSandbox().getTools() == null) {
             return ALLOW_ALL;
         }
-        var toolsCfg = cfg.getSandbox().getTools();
+        OpenClawConfig.SandboxToolsConfig toolsCfg = cfg.getSandbox().getTools();
         Set<String> allow = toolsCfg.getAllow() != null
                 ? new HashSet<>(toolsCfg.getAllow())
                 : Collections.emptySet();
