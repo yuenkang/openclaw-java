@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 4: reply/ + queue/ (10 Java files, 1262 lines)
+
+### Added (autoreply/reply/ 包 + queue/ 子包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `queue/QueueTypes.java` | `queue/types.ts` | 106 |
+| `queue/QueueNormalize.java` | `queue/normalize.ts` | 48 |
+| `queue/QueueState.java` | `queue/state.ts` | 93 |
+| `queue/QueueCleanup.java` | `queue/cleanup.ts` | 47 |
+| `queue/QueueDirective.java` | `queue/directive.ts` | 182 |
+| `queue/QueueSettingsResolver.java` | `queue/settings.ts` | 139 |
+| `ReplyThreading.java` | `reply-threading.ts` | 90 |
+| `ReplyDispatcher.java` | `reply-dispatcher.ts` | 175 |
+| `NormalizeReply.java` | `normalize-reply.ts` | 116 |
+| `BlockReplyPipeline.java` | `block-reply-pipeline.ts` | 266 |
+
+---
+
 ## Phase 19 — Auto-Reply Batch 3: reply/ (10 Java files)
 
 ### Added (autoreply/reply/ 包, 10 new files)
