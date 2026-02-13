@@ -1,5 +1,34 @@
 # Changelog
 
+## Phase 20 — Gateway Batch 2: protocol/ root + server/ (12 Java files, 744 lines)
+
+### Added
+
+**protocol/ (3 files)**
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `ClientInfo.java` | `client-info.ts` | 87 |
+| `GatewayClientInfoDto.java` | `client-info.ts` (GatewayClientInfo type) | 46 |
+| `ProtocolValidation.java` | `index.ts` (formatValidationErrors) | 38 |
+
+`schema.ts` (barrel re-export) → 不需要 Java 翻译  
+`index.ts` (AJV validators) → Java 用 Jackson 反序列化代替
+
+**server/ (9 files)**
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `CloseReason.java` | `close-reason.ts` | 42 |
+| `HealthState.java` | `health-state.ts` | 101 |
+| `GatewayWsClient.java` | `ws-types.ts` | 36 |
+| `HttpListen.java` | `http-listen.ts` | 65 |
+| `GatewayTls.java` | `tls.ts` | 35 |
+| `GatewayHooks.java` | `hooks.ts` | 62 |
+| `PluginsHttp.java` | `plugins-http.ts` | 35 |
+| `WsConnectionHandler.java` | `ws-connection.ts` | 73 |
+| `WsMessageHandler.java` | `ws-connection/message-handler.ts` | 124 |
+
 ## Phase 20 — Gateway Batch 1: protocol/schema types (14 Java files, 1727 lines)
 
 ### Added (protocol/schema/ 包, 14 new files)
