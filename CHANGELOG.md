@@ -1,5 +1,28 @@
 # Changelog
 
+## Phase 20 — Gateway Batch 1: protocol/schema types (14 Java files, 1727 lines)
+
+### Added (protocol/schema/ 包, 14 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `AgentSchemas.java` | `agent.ts` | 131 |
+| `AgentsModelsSkillsSchemas.java` | `agents-models-skills.ts` | 183 |
+| `ChannelsSchemas.java` | `channels.ts` | 135 |
+| `ConfigSchemas.java` | `config.ts` | 93 |
+| `CronSchemas.java` | `cron.ts` | 198 |
+| `DevicesSchemas.java` | `devices.ts` | 86 |
+| `ExecApprovalsSchemas.java` | `exec-approvals.ts` | 137 |
+| `LogsChatSchemas.java` | `logs-chat.ts` | 103 |
+| `NodesSchemas.java` | `nodes.ts` | 136 |
+| `SessionsSchemas.java` | `sessions.ts` | 126 |
+| `WizardSchemas.java` | `wizard.ts` | 125 |
+| `SnapshotSchemas.java` | `snapshot.ts` | 56 |
+| `ProtocolPrimitives.java` | `primitives.ts` + `error-codes.ts` + `protocol-schemas.ts` | 33 |
+| `ProtocolSchemaRegistry.java` | `protocol-schemas.ts` + `types.ts` | 145 |
+
+Also covers: `types.ts` (type aliases → not needed in Java), `protocol-schemas.ts` (schema registry → `ProtocolSchemaRegistry`).
+
 ## Phase 19 — Auto-Reply Batch 12: auto-reply root directory (13 Java files, 2129 lines)
 
 ### Added (autoreply/ 包, 13 new files)
