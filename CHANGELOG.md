@@ -1,5 +1,20 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 11: agent-runner-execution + get-reply-* pipeline (6 Java files, 1148 lines)
+
+### Added (autoreply/reply/ 包, 6 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `AgentRunnerExecution.java` | `agent-runner-execution.ts` | 239 |
+| `AgentRunner.java` | `agent-runner.ts` | 186 |
+| `GetReplyDirectivesApply.java` | `get-reply-directives-apply.ts` | 157 |
+| `GetReplyDirectives.java` | `get-reply-directives.ts` | 224 |
+| `GetReplyInlineActions.java` | `get-reply-inline-actions.ts` | 88 |
+| `GetReplyRun.java` | `get-reply-run.ts` | 187 |
+
+Phase 19 累计 107/121 文件（~12863 行）。auto-reply/reply 目录翻译完成 ✅
+
 ## Phase 19 — Auto-Reply Batch 10: agent-runner + bash + model-selection + get-reply (10 Java files, 1591 lines)
 
 ### Added (autoreply/reply/ 包, 10 new files)
