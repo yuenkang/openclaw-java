@@ -1,5 +1,45 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 7: commands + directives (10 Java files, 913 lines)
+
+### Added (autoreply/reply/ 包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `CommandsBash.java` | `commands-bash.ts` | 60 |
+| `CommandsContextBuilder.java` | `commands-context.ts` | 50 |
+| `CommandsPlugin.java` | `commands-plugin.ts` | 46 |
+| `CommandsCompact.java` | `commands-compact.ts` | 98 |
+| `CommandsTts.java` | `commands-tts.ts` | 120 |
+| `CommandsCore.java` | `commands-core.ts` | 95 |
+| `DirectiveHandlingParse.java` | `directive-handling.parse.ts` | 108 |
+| `DirectiveHandlingAuth.java` | `directive-handling.auth.ts` | 100 |
+| `DirectiveHandlingPersist.java` | `directive-handling.persist.ts` | 97 |
+| `CommandsModels.java` | `commands-models.ts` | 119 |
+
+---
+
+## Phase 19 — Auto-Reply Batch 6: commands + routing (10 Java files, 1291 lines)
+
+### Added (autoreply/reply/ 包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `DebugCommands.java` | `debug-commands.ts` | 80 |
+| `InboundDedupe.java` | `inbound-dedupe.ts` | 150 |
+| `RouteReply.java` | `route-reply.ts` | 200 |
+| `CommandsApprove.java` | `commands-approve.ts` | 126 |
+| `CommandsPtt.java` | `commands-ptt.ts` | 209 |
+| `CommandsInfo.java` | `commands-info.ts` | 205 |
+| `CommandsStatus.java` | `commands-status.ts` | 250 |
+| `CommandsConfig.java` | `commands-config.ts` | 100 |
+| `CommandsSession.java` | `commands-session.ts` | 380 |
+| `LineDirectives.java` | `line-directives.ts` | 343 |
+
+---
+
+
+
 ## Phase 19 — Auto-Reply Batch 5: reply/ + queue/ (10 Java files, 1178 lines)
 
 ### Added (autoreply/reply/ 包 + queue/ 子包, 10 new files)
