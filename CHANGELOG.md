@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 8: directives + inbound + streaming (10 Java files, 942 lines)
+
+### Added (autoreply/reply/ 包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `DirectiveHandlingFastLane.java` | `directive-handling.fast-lane.ts` | 138 |
+| `DirectiveHandlingModelPicker.java` | `directive-handling.model-picker.ts` | 93 |
+| `DirectiveHandlingQueueValidation.java` | `directive-handling.queue-validation.ts` | 62 |
+| `DirectiveHandling.java` | `directive-handling.ts` | 42 |
+| `InboundContext.java` | `inbound-context.ts` | 118 |
+| `InboundSenderMeta.java` | `inbound-sender-meta.ts` | 74 |
+| `ProviderDispatcher.java` | `provider-dispatcher.ts` | 46 |
+| `QueueFacade.java` | `queue.ts` | 26 |
+| `StreamingDirectives.java` | `streaming-directives.ts` | 164 |
+| `SessionResetModel.java` | `session-reset-model.ts` | 157 |
+
+---
+
 ## Phase 19 — Auto-Reply Batch 7: commands + directives (10 Java files, 913 lines)
 
 ### Added (autoreply/reply/ 包, 10 new files)
