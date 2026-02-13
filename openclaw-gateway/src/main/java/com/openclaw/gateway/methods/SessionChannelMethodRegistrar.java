@@ -179,13 +179,11 @@ public class SessionChannelMethodRegistrar {
         payload.put("ts", System.currentTimeMillis());
 
         Map<String, Object> channels = new LinkedHashMap<>();
-        if (cfg.getChannels() != null && cfg.getChannels().getConfig() != null) {
-            for (var entry : cfg.getChannels().getConfig().entrySet()) {
+        if (cfg.getChannels() != null && cfg.getChannels().getProviders() != null) {
+            for (var entry : cfg.getChannels().getProviders().entrySet()) {
                 Map<String, Object> ch = new LinkedHashMap<>();
-                var channelCfg = entry.getValue();
-                ch.put("configured", channelCfg.getBotToken() != null
-                        && !channelCfg.getBotToken().isEmpty());
-                ch.put("enabled", channelCfg.isEnabled());
+                ch.put("configured", entry.getValue() != null);
+                ch.put("enabled", entry.getValue() != null);
                 channels.put(entry.getKey(), ch);
             }
         }

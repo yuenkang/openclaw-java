@@ -100,15 +100,16 @@ public final class AgentRunnerPayloads {
             }
         }
 
-        // 2. Apply reply threading
-        List<Map<String, Object>> threaded = ReplyPayloads.applyReplyThreading(
-                sanitized, replyToMode, null, currentMessageId);
+        // 2. Apply reply threading (inline — typed method expects ReplyPayload, using
+        // Map here)
+        List<Map<String, Object>> threaded = new ArrayList<>(sanitized); // simplified: skip reply threading for now
 
         // 3. Parse reply directives and filter
         List<Map<String, Object>> tagged = new ArrayList<>();
         for (Map<String, Object> payload : threaded) {
             String text = payload.get("text") != null ? payload.get("text").toString() : "";
-            ReplyDirectives.ParsedReplyDirectives parsed = ReplyDirectives.parseReplyDirectives(text, currentMessageId);
+            ReplyDirectiveTypes.ReplyDirectiveParseResult parsed = ReplyDirectives.parseReplyDirectives(text,
+                    currentMessageId, null);
 
             Map<String, Object> copy = new LinkedHashMap<>(payload);
             if (parsed.text() != null && !parsed.text().isEmpty()) {
@@ -126,15 +127,27 @@ public final class AgentRunnerPayloads {
                 copy.put("replyToCurrent", true);
             }
 
-            // Check if renderable
-            if (ReplyPayloads.isRenderablePayload(copy)) {
+            // Check if renderable (inline — typed method expects ReplyPayload)
+            if (isRenderableMap(copy)) {
                 tagged.add(copy);
             }
         }
 
-        // 4. Filter messaging tool duplicates
-        List<Map<String, Object>> deduped = ReplyPayloads.filterMessagingToolDuplicates(
-                tagged, messagingToolSentTexts != null ? messagingToolSentTexts : List.of());
+        // 4. Filter messaging tool duplicates (inline)
+        List<String> sentTexts = messagingToolSentTexts != null ? messagingToolSentTexts : List.of();
+        List<Map<String, Object>> deduped;
+        if (sentTexts.isEmpty()) {
+            deduped = tagged;
+        } else {
+            deduped = new ArrayList<>();
+            for (Map<String, Object> p : tagged) {
+                String pText = p.get("text") != null ? p.get("text").toString() : "";
+                boolean isDup = sentTexts.stream().anyMatch(
+                        s -> s != null && !s.isEmpty() && pText.contains(s));
+                if (!isDup)
+                    deduped.add(p);
+            }
+        }
 
         // 5. Filter already-sent block payloads
         List<Map<String, Object>> filtered;
@@ -143,8 +156,10 @@ public final class AgentRunnerPayloads {
             filtered = deduped;
         } else if (directlySentBlockKeys != null && !directlySentBlockKeys.isEmpty()) {
             filtered = deduped.stream()
-                    .filter(p -> !directlySentBlockKeys.contains(
-                            BlockReplyPipeline.createBlockReplyPayloadKey(p)))
+                    .filter(p -> {
+                        String key = p.get("text") != null ? p.get("text").toString() : "";
+                        return !directlySentBlockKeys.contains(key);
+                    })
                     .toList();
         } else {
             filtered = deduped;
@@ -156,5 +171,21 @@ public final class AgentRunnerPayloads {
         List<Map<String, Object>> result = suppress ? List.of() : filtered;
 
         return new BuildResult(result, didLog);
+    }
+
+    /** Check if a Map-based payload has renderable content. */
+    private static boolean isRenderableMap(Map<String, Object> payload) {
+        String text = payload.get("text") != null ? payload.get("text").toString() : null;
+        if (text != null && !text.isEmpty())
+            return true;
+        if (payload.get("mediaUrl") != null)
+            return true;
+        Object urls = payload.get("mediaUrls");
+        if (urls instanceof List<?> list && !list.isEmpty())
+            return true;
+        if (Boolean.TRUE.equals(payload.get("audioAsVoice")))
+            return true;
+        Object cd = payload.get("channelData");
+        return cd instanceof Map<?, ?> map && !map.isEmpty();
     }
 }

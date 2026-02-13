@@ -74,7 +74,7 @@ public final class BashCommand {
             "^/bash(?:\\s*:\\s*|\\s+|$)([\\s\\S]*)$", Pattern.CASE_INSENSITIVE);
 
     static BashRequest parseBashRequest(String raw) {
-        String trimmed = raw.trimStart();
+        String trimmed = raw.stripLeading();
         String restSource;
 
         if (trimmed.toLowerCase().startsWith("/bash")) {
@@ -84,14 +84,14 @@ public final class BashCommand {
             restSource = m.group(1) != null ? m.group(1) : "";
         } else if (trimmed.startsWith("!")) {
             restSource = trimmed.substring(1);
-            if (restSource.trimStart().startsWith(":")) {
-                restSource = restSource.trimStart().substring(1);
+            if (restSource.stripLeading().startsWith(":")) {
+                restSource = restSource.stripLeading().substring(1);
             }
         } else {
             return null;
         }
 
-        String rest = restSource.trimStart();
+        String rest = restSource.stripLeading();
         if (rest.isEmpty())
             return new BashRequest.Help();
 
@@ -243,7 +243,7 @@ public final class BashCommand {
         if (source == null)
             source = "";
         String stripped = Mentions.stripStructuralPrefixes(source);
-        return isGroup ? Mentions.stripMentions(stripped, ctx, cfg, agentId) : stripped;
+        return isGroup ? Mentions.stripMentions(stripped, List.of()) : stripped;
     }
 
     private static String coalesce(String... values) {

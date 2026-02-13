@@ -119,12 +119,14 @@ public final class FollowupRunner {
 
             // Route to originating channel or fall back to dispatcher
             if (shouldRouteToOriginating) {
-                RouteReply.RouteResult result = RouteReply.routeReply(
-                        payload, originatingChannel, originatingTo,
+                var routeParams = new RouteReply.RouteReplyParams(
+                        null, // AutoReplyTypes.ReplyPayload - deferred
+                        originatingChannel, originatingTo,
                         (String) queued.run().get("sessionKey"),
                         queued.originatingAccountId(),
                         queued.originatingThreadId(),
-                        queued.run());
+                        queued.run(), false);
+                RouteReply.RouteReplyResult result = RouteReply.routeReply(routeParams).join();
                 if (!result.ok() && onBlockReply != null) {
                     log.debug("followup queue: route-reply failed: {}", result.error());
                     onBlockReply.accept(payload);

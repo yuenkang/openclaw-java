@@ -79,7 +79,7 @@ public final class AgentRunnerExecution {
             text = stripped;
         }
 
-        if (text != null && ReplyTokens.isSilentReplyText(text)) {
+        if (text != null && com.openclaw.agent.autoreply.ReplyTokens.isSilentReplyText(text)) {
             return new NormalizedStreamingText(null, true);
         }
         if (text == null || text.isEmpty()) {

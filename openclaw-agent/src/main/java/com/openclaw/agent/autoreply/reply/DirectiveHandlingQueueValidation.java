@@ -1,5 +1,7 @@
 package com.openclaw.agent.autoreply.reply;
 
+import com.openclaw.agent.autoreply.AutoReplyTypes;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

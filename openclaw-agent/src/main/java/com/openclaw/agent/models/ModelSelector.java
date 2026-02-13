@@ -1,6 +1,7 @@
 package com.openclaw.agent.models;
 
 import com.openclaw.common.config.OpenClawConfig;
+import com.openclaw.common.config.OpenClawConfig.AgentModelEntryConfig;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -89,7 +90,8 @@ public class ModelSelector {
         if (cfg == null || cfg.getAgents() == null || cfg.getAgents().getDefaults() == null) {
             return new ModelRef(defaultProvider, defaultModel);
         }
-        String rawModel = cfg.getAgents().getDefaults().getModel();
+        var modelCfg = cfg.getAgents().getDefaults().getModel();
+        String rawModel = modelCfg != null ? modelCfg.getPrimary() : null;
         if (rawModel == null || rawModel.isBlank()) {
             return new ModelRef(defaultProvider, defaultModel);
         }
@@ -114,8 +116,9 @@ public class ModelSelector {
     public static ModelRef resolveModelForAgent(OpenClawConfig cfg, String agentId) {
         if (cfg != null && cfg.getAgents() != null && cfg.getAgents().getEntries() != null && agentId != null) {
             for (var entry : cfg.getAgents().getEntries()) {
-                if (agentId.equals(entry.getId()) && entry.getModel() != null && !entry.getModel().isBlank()) {
-                    ModelRef parsed = parseModelRef(entry.getModel(), DEFAULT_PROVIDER);
+                String entryModel = entry.getModelString();
+                if (agentId.equals(entry.getId()) && entryModel != null && !entryModel.isBlank()) {
+                    ModelRef parsed = parseModelRef(entryModel, DEFAULT_PROVIDER);
                     if (parsed != null)
                         return parsed;
                 }
@@ -132,19 +135,17 @@ public class ModelSelector {
         if (cfg == null || cfg.getAgents() == null || cfg.getAgents().getDefaults() == null) {
             return aliases;
         }
-        Map<String, Object> models = cfg.getAgents().getDefaults().getModels();
+        Map<String, AgentModelEntryConfig> models = cfg.getAgents().getDefaults().getModels();
         if (models == null)
             return aliases;
 
-        for (Map.Entry<String, Object> entry : models.entrySet()) {
+        for (Map.Entry<String, AgentModelEntryConfig> entry : models.entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();
-            if (value instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> modelEntry = (Map<String, Object>) value;
-                Object alias = modelEntry.get("alias");
-                if (alias instanceof String && !((String) alias).isBlank()) {
-                    aliases.put(((String) alias).trim().toLowerCase(), key);
+            if (value instanceof AgentModelEntryConfig modelEntry) {
+                String alias = modelEntry.getAlias();
+                if (alias != null && !alias.isBlank()) {
+                    aliases.put(alias.trim().toLowerCase(), key);
                 }
             }
         }
@@ -194,7 +195,11 @@ public class ModelSelector {
         if (cfg == null || cfg.getAgents() == null || cfg.getAgents().getDefaults() == null) {
             return Collections.emptyList();
         }
-        List<String> fallbacks = cfg.getAgents().getDefaults().getModelFallbacks();
+        var modelCfg = cfg.getAgents().getDefaults().getModel();
+        List<String> fallbacks = modelCfg != null ? modelCfg.getFallbacks() : null;
+        if (fallbacks == null) {
+            fallbacks = cfg.getAgents().getDefaults().getModelFallbacks();
+        }
         return fallbacks != null ? fallbacks : Collections.emptyList();
     }
 

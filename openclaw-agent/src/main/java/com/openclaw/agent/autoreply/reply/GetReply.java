@@ -116,7 +116,7 @@ public final class GetReply {
         log.debug("Ensuring agent workspace for agent {}", agentId);
 
         // 6. Finalize inbound context
-        Map<String, Object> finalized = InboundContext.finalizeInboundContext(ctx);
+        InboundContext.finalizeInboundContext(ctx, new InboundContext.FinalizeOptions());
 
         // 7. Media/link understanding (deferred)
 

@@ -38,6 +38,7 @@ public class OpenClawConfig {
     private MessagesConfig messages;
     private CommandsConfig commands;
     private ApprovalsConfig approvals;
+    private SandboxConfig sandbox;
     private SessionConfig session;
     private WebConfig web;
     private ChannelsConfig channels;
@@ -48,6 +49,12 @@ public class OpenClawConfig {
     private TalkConfig talk;
     private GatewayConfig gateway;
     private MemoryConfig memory;
+
+    /** Legacy top-level model aliases (agent.modelAliases in TS). */
+    private Map<String, String> modelAliases;
+
+    /** Top-level default model shortcut (e.g. "anthropic/claude-sonnet-4-5"). */
+    private String model;
 
     // ===== types.openclaw.ts: MetaConfig =====
 
@@ -312,19 +319,27 @@ public class OpenClawConfig {
         /** "merge" | "replace" */
         private String mode;
         private Map<String, ProviderConfig> providers;
+        private List<ModelDefinition> definitions;
         private BedrockDiscoveryConfig bedrockDiscovery;
     }
 
     @Data
     public static class ProviderConfig {
+        private String id;
         private String baseUrl;
+        /** Alias for baseUrl used by some callers */
+        private String apiBaseUrl;
         private String apiKey;
         /** "api-key" | "aws-sdk" | "oauth" | "token" */
         private String auth;
         private String api;
         private Map<String, String> headers;
         private Boolean authHeader;
+        private boolean enabled = true;
         private List<ModelDefinition> models;
+
+        /** Provider name/displayName alias. */
+        private String provider;
     }
 
     @Data
@@ -366,6 +381,18 @@ public class OpenClawConfig {
         private Integer refreshInterval;
         private Integer defaultContextWindow;
         private Integer defaultMaxTokens;
+    }
+
+    @Data
+    public static class SandboxConfig {
+        private Boolean enabled;
+        private SandboxToolsConfig tools;
+    }
+
+    @Data
+    public static class SandboxToolsConfig {
+        private List<String> allow;
+        private List<String> deny;
     }
 
     // ===== types.agents.ts =====
@@ -504,6 +531,8 @@ public class OpenClawConfig {
         private Integer maxConcurrent;
         private SubagentDefaultsConfig subagents;
         private AgentSandboxConfig sandbox;
+        private List<String> modelFallbacks;
+        private List<String> modelAllowlist;
     }
 
     @Data

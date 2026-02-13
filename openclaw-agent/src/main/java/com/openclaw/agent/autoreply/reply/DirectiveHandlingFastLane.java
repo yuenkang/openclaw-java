@@ -1,5 +1,6 @@
 package com.openclaw.agent.autoreply.reply;
 
+import com.openclaw.agent.autoreply.AutoReplyTypes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

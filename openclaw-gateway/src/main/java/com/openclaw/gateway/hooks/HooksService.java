@@ -43,8 +43,13 @@ public class HooksService {
      */
     public HooksConfigResolved resolveConfig() {
         var cfg = configService.loadConfig();
-        var hooks = cfg.getPlugins() != null
-                ? (Map<?, ?>) cfg.getPlugins().get("hooks")
+        var pluginsCfg = cfg.getPlugins();
+        var hooksEntry = pluginsCfg != null && pluginsCfg.getEntries() != null
+                ? pluginsCfg.getEntries().get("hooks")
+                : null;
+        @SuppressWarnings("unchecked")
+        Map<?, ?> hooks = hooksEntry != null && hooksEntry.getConfig() != null
+                ? (Map<?, ?>) hooksEntry.getConfig()
                 : null;
         if (hooks == null || !Boolean.TRUE.equals(hooks.get("enabled"))) {
             return null;

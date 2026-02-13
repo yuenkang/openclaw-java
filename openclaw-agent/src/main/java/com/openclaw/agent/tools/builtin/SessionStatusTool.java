@@ -141,17 +141,16 @@ public class SessionStatusTool implements AgentTool {
     }
 
     private String resolveDefaultModel() {
-        // Try root-level model first
-        if (config != null && config.getModel() != null && !config.getModel().isBlank()) {
-            return config.getModel();
-        }
-        // Try agents.defaults.model
+        // Try agents.defaults.model.primary
         if (config != null && config.getAgents() != null
                 && config.getAgents().getDefaults() != null) {
-            String model = config.getAgents().getDefaults().getModel();
-            if (model != null && !model.isBlank()) {
-                return model;
+            var modelCfg = config.getAgents().getDefaults().getModel();
+            if (modelCfg != null && modelCfg.getPrimary() != null && !modelCfg.getPrimary().isBlank()) {
+                return modelCfg.getPrimary();
             }
+            // Legacy: try top-level model aliases
+            String model = config.getAgents().getDefaults().getThinkingDefault();
+            // Not useful here, fall through
         }
         return "anthropic/claude-sonnet-4-20250514";
     }
