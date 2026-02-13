@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 5: reply/ + queue/ (10 Java files, 1178 lines)
+
+### Added (autoreply/reply/ 包 + queue/ 子包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `ReplyPayloads.java` | `reply-payloads.ts` | 168 |
+| `Body.java` | `body.ts` | 39 |
+| `SessionUsage.java` | `session-usage.ts` | 89 |
+| `Groups.java` | `groups.ts` | 126 |
+| `ReplyElevated.java` | `reply-elevated.ts` | 214 |
+| `Abort.java` | `abort.ts` | 122 |
+| `ReplyDirectives.java` | `reply-directives.ts` | 83 |
+| `queue/QueueEnqueue.java` | `queue/enqueue.ts` | 123 |
+| `queue/QueueDrain.java` | `queue/drain.ts` | 139 |
+| `ConfigCommands.java` | `config-commands.ts` | 75 |
+
+---
+
 ## Phase 19 — Auto-Reply Batch 4: reply/ + queue/ (10 Java files, 1262 lines)
 
 ### Added (autoreply/reply/ 包 + queue/ 子包, 10 new files)
