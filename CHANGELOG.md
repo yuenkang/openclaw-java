@@ -1,5 +1,17 @@
 # Changelog
 
+## Phase 21 — Config Batch 3: 配置 I/O 和工具 (5 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `ConfigIncludes.java` | `includes.ts` (250 行) | $include 指令解析、循环检测、深度限制、deep merge |
+| `ConfigMerge.java` | `merge-config.ts` + `merge-patch.ts` (68 行) | section merge + RFC 7396 JSON merge-patch |
+| `ConfigCacheUtils.java` | `cache-utils.ts` (28 行) | TTL 解析、cache 启停、文件 mtime |
+| `ConfigRedactor.java` | `redact-snapshot.ts` (169 行) | 敏感值脱敏、raw text 替换、sentinel 还原 |
+| `ConfigValidation.java` | `validation.ts` (362 行) | gateway/models/agents/avatar 校验 |
+
 ## Phase 20 — Batch 4 Group D: Gateway 其它文件 (8 Java files)
 
 ### Added
