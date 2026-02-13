@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 9: session + history + dispatch + allowlist (10 Java files, 1756 lines)
+
+### Added (autoreply/reply/ 包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `History.java` | `history.ts` | 161 |
+| `SessionUpdates.java` | `session-updates.ts` | 148 |
+| `Session.java` | `session.ts` | 139 |
+| `StageSandboxMedia.java` | `stage-sandbox-media.ts` | 134 |
+| `CommandsContextReport.java` | `commands-context-report.ts` | 100 |
+| `CommandsSubagents.java` | `commands-subagents.ts` | 168 |
+| `DirectiveHandlingImpl.java` | `directive-handling.impl.ts` | 197 |
+| `DirectiveHandlingModel.java` | `directive-handling.model.ts` | 160 |
+| `DispatchFromConfig.java` | `dispatch-from-config.ts` | 80 |
+| `CommandsAllowlist.java` | `commands-allowlist.ts` | 289 |
+
+Phase 19 累计 91/121 文件（~10124 行）。
+
 ## Phase 19 — Auto-Reply Batch 8: directives + inbound + streaming (10 Java files, 942 lines)
 
 ### Added (autoreply/reply/ 包, 10 new files)
