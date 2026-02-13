@@ -1,5 +1,25 @@
 # Changelog
 
+## Phase 21 — Config Batch 1: 类型补全 (OpenClawConfig.java 重写)
+
+### Modified
+
+| Java 文件 | 说明 | 行数变化 |
+|-----------|------|----------|
+| `OpenClawConfig.java` | 完全重写，覆盖 25 个 `types.*.ts` 的 90+ 个嵌套类型 | 285 → 1100+ |
+| `ConfigService.java` | `AgentDefaults` → `AgentDefaultsConfig` 兼容修复 | 1 行 |
+| `AgentScope.java` | `getModel()` → `getModelString()`，defaults model 访问路径更新 | ~15 行 |
+
+**新增嵌套类型分类：**
+- 顶层段：`MetaConfig`, `EnvConfig`, `WizardConfig`, `UpdateConfig`, `UiConfig`
+- Session：`SessionConfig` (含 reset/sendPolicy/a2a)
+- 日志/诊断：`LoggingConfig`, `DiagnosticsConfig` (含 OTEL/CacheTrace)
+- Gateway：完整 `GatewayConfig` 树 (TLS/Auth/Remote/Reload/Tailscale/Http/Nodes/ControlUi)
+- Agent：`AgentDefaultsConfig` (contextPruning/compaction/heartbeat/cliBackends)
+- Tools：完整 `ToolsConfig` 树 (web/media/links/message/exec/elevated/sandbox)
+- Memory：`MemorySearchConfig` (provider/store/chunking/sync/query/cache)
+- Messages/Hooks/TTS/Channels/Cron/Sandbox/NodeHost/Discovery/CanvasHost/Talk
+
 ## Phase 20 — Gateway Batch 4: Root Gateway 文件 (11 Java files)
 
 ### Added

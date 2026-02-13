@@ -125,7 +125,7 @@ public class AgentScope {
                 normalizeAgentId(entry.getId()),
                 entry.getName(),
                 entry.getDescription(),
-                entry.getModel(),
+                entry.getModelString(),
                 null, // workspace from entry if available
                 entry.getModelFallbacks());
     }
@@ -146,14 +146,10 @@ public class AgentScope {
         }
         // Agent defaults
         if (cfg.getAgents() != null && cfg.getAgents().getDefaults() != null) {
-            String defaultModel = cfg.getAgents().getDefaults().getModel();
-            if (defaultModel != null && !defaultModel.isBlank()) {
-                return defaultModel.trim();
+            var defaultsModel = cfg.getAgents().getDefaults().getModel();
+            if (defaultsModel != null && defaultsModel.getPrimary() != null && !defaultsModel.getPrimary().isBlank()) {
+                return defaultsModel.getPrimary().trim();
             }
-        }
-        // Global model
-        if (cfg.getModel() != null && !cfg.getModel().isBlank()) {
-            return cfg.getModel().trim();
         }
         return null;
     }
@@ -170,9 +166,9 @@ public class AgentScope {
         }
         // Agent defaults fallbacks
         if (cfg.getAgents() != null && cfg.getAgents().getDefaults() != null) {
-            List<String> defaults = cfg.getAgents().getDefaults().getModelFallbacks();
-            if (defaults != null)
-                return defaults;
+            var defaultsModel = cfg.getAgents().getDefaults().getModel();
+            if (defaultsModel != null && defaultsModel.getFallbacks() != null)
+                return defaultsModel.getFallbacks();
         }
         return List.of();
     }
