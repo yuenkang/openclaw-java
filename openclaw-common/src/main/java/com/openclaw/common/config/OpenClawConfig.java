@@ -1488,6 +1488,10 @@ public class OpenClawConfig {
         private Boolean enabled;
         private String store;
         private String path;
+        /** "builtin" or "qmd" — memory indexing backend. */
+        private String backend;
+        /** "auto", "always", or "never" — citation mode. */
+        private String citations;
     }
 
     // ===== types.plugins.ts =====
