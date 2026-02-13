@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 22 — Channels Batch 1: 类型定义 + 简单工具 (9 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `ChatType.java` | `chat-type.ts` | 聊天类型标准化 (direct/group/channel) |
+| `MessagingTarget.java` | `targets.ts` | 消息目标类型 + 验证工具 |
+| `AllowlistMatch.java` | `allowlist-match.ts` | 白名单匹配结果类型 |
+| `ChannelLocation.java` | `location.ts` | 位置消息标准化 + 格式化 |
+| `ChannelTyping.java` | `typing.ts` | 打字回调工厂 |
+| `SenderLabel.java` | `sender-label.ts` | 发送者标签构建 |
+| `ChannelLogging.java` | `logging.ts` | 频道事件日志 |
+| `CommandGating.java` | `command-gating.ts` | 命令权限 gate |
+| `MentionGating.java` | `mention-gating.ts` | @提及 gate 逻辑 |
+
 ## Phase 21 — Config Batch 6: 版本 + Overrides + IO (3 Java files)
 
 ### Added
