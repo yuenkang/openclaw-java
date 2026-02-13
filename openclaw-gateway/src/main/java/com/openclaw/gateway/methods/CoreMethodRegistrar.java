@@ -8,14 +8,17 @@ import com.openclaw.common.model.AcpSession;
 import com.openclaw.gateway.routing.RouteResolver;
 import com.openclaw.gateway.session.SessionStore;
 import com.openclaw.gateway.session.SessionTranscriptStore;
+import com.openclaw.gateway.websocket.EventBroadcaster;
 import com.openclaw.gateway.websocket.GatewayConnection;
 import com.openclaw.gateway.websocket.GatewayMethodRouter;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Registers core Gateway method handlers.
@@ -37,6 +40,14 @@ public class CoreMethodRegistrar {
     private final ConfigService configService;
     private final RouteResolver routeResolver;
     private final ModelCatalog modelCatalog;
+    private final EventBroadcaster broadcaster;
+    @Nullable
+    private final ChatAgentBridge chatAgentBridge;
+
+    /**
+     * Idempotency cache for agent invocations: idempotencyKey → cached result.
+     */
+    private final Map<String, Map<String, Object>> agentDedupe = new ConcurrentHashMap<>();
 
     public CoreMethodRegistrar(
             GatewayMethodRouter methodRouter,
@@ -44,13 +55,17 @@ public class CoreMethodRegistrar {
             SessionTranscriptStore transcriptStore,
             ConfigService configService,
             RouteResolver routeResolver,
-            ModelCatalog modelCatalog) {
+            ModelCatalog modelCatalog,
+            EventBroadcaster broadcaster,
+            @Nullable ChatAgentBridge chatAgentBridge) {
         this.methodRouter = methodRouter;
         this.sessionStore = sessionStore;
         this.transcriptStore = transcriptStore;
         this.configService = configService;
         this.routeResolver = routeResolver;
         this.modelCatalog = modelCatalog;
+        this.broadcaster = broadcaster;
+        this.chatAgentBridge = chatAgentBridge;
     }
 
     @PostConstruct
@@ -78,6 +93,7 @@ public class CoreMethodRegistrar {
         methodRouter.registerMethod("session.reset", this::handleSessionReset);
 
         // Agent management
+        methodRouter.registerMethod("agent", this::handleAgent);
         methodRouter.registerMethod("agent.list", this::handleAgentList);
         methodRouter.registerMethod("agent.identity.get", this::handleAgentIdentityGet);
 
@@ -337,6 +353,114 @@ public class CoreMethodRegistrar {
     }
 
     // --- Agent Methods ---
+
+    /**
+     * agent — Send a message to an agent and trigger an async run.
+     * Corresponds to TypeScript's server-methods/agent.ts main handler.
+     *
+     * <p>
+     * Accepts immediately with a runId, executes the agent asynchronously,
+     * then broadcasts the final result.
+     */
+    private CompletableFuture<Object> handleAgent(JsonNode params, GatewayConnection conn) {
+        // --- validation ---
+        String message = getTextParam(params, "message", null);
+        String idempotencyKey = getTextParam(params, "idempotencyKey", null);
+        if (message == null || message.isBlank()) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("message is required"));
+        }
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("idempotencyKey is required"));
+        }
+
+        // --- idempotency check ---
+        var cached = agentDedupe.get(idempotencyKey);
+        if (cached != null) {
+            Map<String, Object> dup = new LinkedHashMap<>(cached);
+            dup.put("cached", true);
+            return CompletableFuture.completedFuture(dup);
+        }
+
+        // --- resolve session ---
+        String sessionKey = getTextParam(params, "sessionKey", null);
+        String agentId = getTextParam(params, "agentId", null);
+
+        if (agentId != null) {
+            OpenClawConfig config = configService.loadConfig();
+            var agents = config.getAgents();
+            if (agents != null && agents.getList() != null) {
+                boolean found = agents.getList().stream()
+                        .anyMatch(a -> agentId.equals(a.getId()));
+                if (!found) {
+                    return CompletableFuture.failedFuture(
+                            new IllegalArgumentException("unknown agent id: " + agentId));
+                }
+            }
+        }
+
+        // If no sessionKey provided, build one from agentId
+        if (sessionKey == null || sessionKey.isBlank()) {
+            sessionKey = (agentId != null && !"default".equals(agentId))
+                    ? agentId + ":main"
+                    : "main";
+        }
+
+        // Ensure session exists
+        var sessionOpt = sessionStore.findBySessionKey(sessionKey);
+        if (sessionOpt.isEmpty()) {
+            sessionStore.createSession(sessionKey, System.getProperty("user.dir"));
+            sessionOpt = sessionStore.findBySessionKey(sessionKey);
+        }
+
+        String runId = idempotencyKey;
+        long now = System.currentTimeMillis();
+
+        // Return "accepted" immediately
+        Map<String, Object> accepted = new LinkedHashMap<>();
+        accepted.put("runId", runId);
+        accepted.put("status", "accepted");
+        accepted.put("acceptedAt", now);
+
+        // Store in-flight ack so retries do not spawn a second run
+        agentDedupe.put(idempotencyKey, accepted);
+
+        // --- dispatch asynchronously ---
+        if (chatAgentBridge != null && sessionOpt.isPresent()) {
+            String finalSessionKey = sessionKey;
+            var request = ChatAgentBridge.ChatRunRequest.builder()
+                    .sessionKey(finalSessionKey)
+                    .messages(List.of(Map.of("role", "user", "content", message)))
+                    .listener(new ChatAgentBridge.ChatEventListener() {
+                        @Override
+                        public void onComplete(String finalMessage) {
+                            Map<String, Object> ok = new LinkedHashMap<>();
+                            ok.put("runId", runId);
+                            ok.put("status", "ok");
+                            ok.put("summary", "completed");
+                            agentDedupe.put(idempotencyKey, ok);
+                            broadcaster.broadcastToAll("agent.done", ok);
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            Map<String, Object> err = new LinkedHashMap<>();
+                            err.put("runId", runId);
+                            err.put("status", "error");
+                            err.put("summary", error);
+                            agentDedupe.put(idempotencyKey, err);
+                            broadcaster.broadcastToAll("agent.error", err);
+                        }
+                    })
+                    .build();
+            chatAgentBridge.runChat(request);
+        } else {
+            log.warn("ChatAgentBridge not available; agent run {} not dispatched", runId);
+        }
+
+        return CompletableFuture.completedFuture(accepted);
+    }
 
     /**
      * agent.list — List all configured agents.
