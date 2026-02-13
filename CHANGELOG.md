@@ -1,5 +1,19 @@
 # Changelog
 
+## Phase 21 — Config Batch 4: Agent/Channel 工具 (7 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `AgentDirs.java` | `agent-dirs.ts` (91 行) | agent 目录解析、路径规范化、重复目录检测 |
+| `AgentLimits.java` | `agent-limits.ts` (24 行) | agent/subagent 并发上限解析 |
+| `GroupPolicyResolver.java` | `group-policy.ts` (180 行) | 群组策略解析、allowlist/mention/tool 策略 |
+| `NativeCommandsResolver.java` | `commands.ts` (96 行) | 原生命令/skills 启用检查 |
+| `ChannelCapabilities.java` | `channel-capabilities.ts` (62 行) | 每 channel/account 能力列表解析 |
+| `PortDefaults.java` | `port-defaults.ts` (52 行) | 端口默认值+自动偏移+范围验证 |
+| `TelegramCustomCommands.java` | `telegram-custom-commands.ts` (145 行) | Telegram 自定义命令验证+规范化 |
+
 ## Phase 21 — Config Batch 3: 配置 I/O 和工具 (5 Java files)
 
 ### Added
