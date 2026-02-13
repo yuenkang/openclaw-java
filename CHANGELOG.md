@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 19 — Auto-Reply Batch 3: reply/ (10 Java files)
+
+### Added (autoreply/reply/ 包, 10 new files)
+
+| Java 文件 | 对应 TS 源 | 行数 |
+|-----------|-----------|------|
+| `Typing.java` | `typing.ts` | 192 |
+| `TypingMode.java` | `typing-mode.ts` | 113 |
+| `ReplyDirectiveTypes.java` | `reply-directives.ts` | 24 |
+| `BlockStreamingTypes.java` | `block-streaming.ts` | 26 |
+| `BlockReplyCoalescer.java` | `block-reply-coalescer.ts` | 184 |
+| `GetReplyDirectivesUtils.java` | `get-reply-directives-utils.ts` | 78 |
+| `Mentions.java` | `mentions.ts` | 135 |
+| `MemoryFlush.java` | `memory-flush.ts` | 82 |
+| `ReplyTags.java` | `reply-tags.ts` | 55 |
+| `SessionUsageTypes.java` | `session-usage.ts` | 43 |
+
+---
+
 ## Phase 19 — Auto-Reply Batch 2: reply/ (10 Java files)
 
 ### Added (autoreply/reply/ 包, 10 new files)
