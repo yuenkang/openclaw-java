@@ -116,6 +116,11 @@ public interface ModelProvider {
         /** "system" | "user" | "assistant" | "tool" */
         private String role;
         private String content;
+        /**
+         * Reasoning/thinking content from thinking models (e.g. Claude with extended
+         * thinking).
+         */
+        private String reasoningContent;
         private String toolUseId;
         /** Tool uses included in assistant messages (for multi-turn tool calling) */
         private List<ToolUse> toolUses;

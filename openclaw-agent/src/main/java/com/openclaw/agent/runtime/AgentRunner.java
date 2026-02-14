@@ -262,6 +262,8 @@ public class AgentRunner {
                 return AgentResult.builder()
                         .success(true)
                         .finalMessage(response.getMessage() != null ? response.getMessage().getContent() : "")
+                        .reasoningContent(
+                                response.getMessage() != null ? response.getMessage().getReasoningContent() : null)
                         .events(events)
                         .turns(turns)
                         .build();
@@ -271,6 +273,8 @@ public class AgentRunner {
             messages.add(ModelProvider.ChatMessage.builder()
                     .role("assistant")
                     .content(response.getMessage() != null ? response.getMessage().getContent() : "")
+                    .reasoningContent(
+                            response.getMessage() != null ? response.getMessage().getReasoningContent() : null)
                     .toolUses(response.getToolUses())
                     .build());
 
@@ -432,6 +436,10 @@ public class AgentRunner {
     public static class AgentResult {
         private boolean success;
         private String finalMessage;
+        /**
+         * Reasoning/thinking content from the final LLM response (for thinking models).
+         */
+        private String reasoningContent;
         private String error;
         /** Classified error kind for failover / user messaging. */
         private ErrorClassifier.FailoverReason errorKind;
