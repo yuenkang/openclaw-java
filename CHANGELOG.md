@@ -1,5 +1,103 @@
 # Changelog
 
+## Phase 30 — Channels 桥接层 (5 new Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `TelegramActions.java` | `channels/plugins/actions/telegram.ts` | Telegram 消息动作 (send/react/delete/edit/sticker/search) + 动作门控 |
+| `TelegramOnboarding.java` | `channels/plugins/onboarding/telegram.ts` | Telegram 通道上手向导 — 状态检查、DM 策略、allow-from |
+| `OutboundAdapterLoader.java` | `channels/plugins/outbound/load.ts` | 出站适配器缓存查找 |
+| `DirectoryConfig.java` | `channels/plugins/directory-config.ts` | 配置驱动的 peer/group 目录列表 |
+| `ChannelConfigSchema.java` | `channels/plugins/config-schema.ts` | 通道配置 JSON Schema 构建工具 |
+
+> 核心桥接文件 (ChannelDock/Registry/Session/AckReactions/Catalog/PluginLoader) 已在先前阶段实现。
+
+---
+
+## Phase 29 — Telegram Bot 层 (18 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `TelegramBot.java` | `telegram/bot.ts` | Bot 入口, 工厂, 选项, 上下文, 轮询生命周期 |
+| `TelegramBotUpdates.java` | `telegram/bot-updates.ts` | Update 去重 (LRU) + media-group 合批 |
+| `TelegramBotHandlers.java` | `telegram/bot-handlers.ts` | 消息/回调/media-group handler 注册 |
+| `TelegramBotAccess.java` | `telegram/bot-access.ts` | Allow-list 归一化 + 发送者检查 |
+| `TelegramBotMessage.java` | `telegram/bot-message.ts` | 消息处理器工厂 (上下文构建→派发) |
+| `TelegramBotMessageContext.java` | `telegram/bot-message-context.ts` | 富消息上下文 (sender/chat/media/mentions) |
+| `TelegramBotMessageDispatch.java` | `telegram/bot-message-dispatch.ts` | 消息派发到 agent + 回复投递 |
+| `TelegramBotNativeCommands.java` | `telegram/bot-native-commands.ts` | 原生命令 (/start /help /model 等) |
+| `TelegramBotDelivery.java` | `telegram/bot-delivery.ts` | 回复投递 + 文本分块 |
+| `TelegramBotHelpers.java` | `telegram/bot-helpers.ts` | 会话 key、peer ID、配置解析辅助 |
+| `TelegramFetch.java` | `telegram/fetch.ts` | Telegram Bot API HTTP 调用封装 |
+| `TelegramDownload.java` | `telegram/download.ts` | 文件信息获取 + 下载 |
+| `TelegramWebhook.java` | `telegram/webhook.ts` | Webhook 设置/删除/信息查询 |
+| `TelegramMonitor.java` | `telegram/monitor.ts` | 连接健康监控 + 卡顿检测 |
+| `TelegramDraftStream.java` | `telegram/draft-stream.ts` | 草稿消息实时编辑 |
+| `TelegramProxy.java` | `telegram/proxy.ts` | HTTP 代理配置 |
+| `TelegramNetworkConfig.java` | `telegram/network-config.ts` | 网络超时 + autoSelectFamily |
+| `TelegramChannelPlugin.java` | `telegram/channel-plugin.ts` | 通道插件入口 (init/start/stop) |
+
+### Modified
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramSend.java` | 新增 `sendMessage` (2 重载) + `editMessage` 便捷方法 |
+
+---
+
+## Phase 28 — Cron + Hooks 补全 (6 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `CronState.java` | `cron/state.ts` | Cron 事件类型 + 结果层级 + 状态摘要 |
+| `CronStore.java` | `cron/store.ts` | Cron 数据文件持久化 (版本管理 + 迁移) |
+| `HookConfig.java` | `hooks/hook-config.ts` | Hook 准入检查 (OS/二进制/环境/配置路径) |
+| `HookEngine.java` | `hooks/engine.ts` | Hook facade, 委托 InternalHookRegistry |
+| `WorkspaceHooks.java` | `hooks/workspace-hooks.ts` | 多目录 Hook 加载 + 优先级 + 快照 |
+| `BundledHookHandlers.java` | `hooks/bundled-handlers.ts` | 内置 Hook (boot-md/command-logger/session-memory) |
+
+---
+
+## Phase 27 — Infra 出站消息投递 (15 Java files)
+
+### Added
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `OutboundTarget.java` | `outbound/target.ts` | 投递目标 DTO |
+| `OutboundTargetResolution.java` | `outbound/resolution.ts` | 目标解析结果 |
+| `SessionDeliveryTarget.java` | `outbound/session-target.ts` | 会话投递目标 |
+| `OutboundDeliveryResult.java` | `outbound/result.ts` | 投递结果 DTO |
+| `OutboundDeliveryJson.java` | `outbound/json.ts` | 投递 JSON 描述 |
+| `OutboundPayloads.java` | `outbound/payloads.ts` | Payload 归一化 |
+| `OutboundEnvelope.java` | `outbound/envelope.ts` | 结果信封 |
+| `OutboundFormat.java` | `outbound/format.ts` | 格式化工具 |
+| `ChannelMessageAdapters.java` | `outbound/adapters.ts` | 渠道适配注册 |
+| `ChannelSelection.java` | `outbound/selection.ts` | 渠道选择/解析 |
+| `OutboundTargetResolver.java` | `outbound/resolver.ts` | 目标解析器 |
+| `OutboundDelivery.java` | `outbound/delivery.ts` | 投递编排 |
+| `OutboundMessage.java` | `outbound/message.ts` | 消息/投票 API |
+| `OutboundSendService.java` | `outbound/send.ts` | 发送服务 |
+| `AgentDelivery.java` | `outbound/agent-delivery.ts` | Agent 投递计划 |
+
+---
+
+## Phase 26 — Gateway 运行时补全 (11 Java files)
+
+### Added
+
+| Java 文件 | 说明 |
+|-----------|------|
+| Gateway 运行时模块 11 个文件 | 运行时方法列表、配置重载处理器、Cron 服务等 |
+
+---
+
 ## Phase 25 — Hooks/Plugins/Cron 模块补齐 (9 Java files, +1565 lines)
 
 ### Added
