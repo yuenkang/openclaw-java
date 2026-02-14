@@ -1,5 +1,119 @@
 # Changelog
 
+## Infra 持久层 — 会话管理命令 (2026-02-15)
+
+### Added
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramBotMessageDispatch.CommandHandler` | 斜杠命令拦截器接口 — 在 LLM pipeline 之前拦截 |
+
+### Modified
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramBotMessageDispatch.java` | 新增 `CommandHandler` 接口 + `dispatch()` 中拦截逻辑 |
+| `TelegramAgentWiring.java` | 实现 `/clear`、`/usage`、`/help` 命令处理 |
+
+**命令:**
+- `/clear` — 清除对话 transcript + 用量记录
+- `/usage` — 显示 token 用量统计（输入/输出/缓存/成本估算）
+- `/help` — 列出可用命令
+- 支持群聊 `@bot` 后缀自动剥离
+
+---
+
+## Infra 持久层 — 用量/成本追踪 (2026-02-15)
+
+### Added
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `UsageTracker.java` | JSONL 用量记录 + 多模型成本估算 (`{sessionId}-usage.jsonl`) |
+
+### Modified
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `AgentRunner.java` | 修复 `totalUsage` 累计 — 跨 turn 聚合 input/output/cache tokens |
+| `TelegramAgentWiring.java` | 集成 `UsageTracker.recordUsage()` |
+
+> 支持模型定价: Claude 3.5/4/Opus/Haiku, GPT-4o/4-turbo/4o-mini, o1/o3/o4-mini, DeepSeek, Gemini 2.0/2.5
+
+---
+
+## Infra 持久层 — 会话历史持久化 (2026-02-15)
+
+### Added
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TranscriptStore.java` | JSONL 对话记录存储 — 追加/读取/清除/计数 |
+| `SessionPersistence.java` | `sessions.json` 会话元数据持久化（原子写入） |
+
+### Modified
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramAgentWiring.java` | 集成历史加载（50 条上下文）+ 保存 + reasoning_content |
+| `OpenAICompatibleProvider.java` | 新增 `reasoning_content` 流式解析 + 非流式解析 |
+| `AgentRunner.java` | 传递 `reasoningContent` 到 `AgentResult` |
+| `ModelProvider.ChatMessage` | 新增 `reasoningContent` 字段 |
+
+> Bot 重启后自动恢复对话上下文。文件布局: `~/.openclaw/state/agents/{agentId}/sessions/{sessionId}.jsonl`
+
+---
+
+## 兼容性修复 + 渠道配置 (2026-02-15)
+
+### Fixed
+
+- **OpenAI 兼容层**: 支持 `OPENAI_BASE_URL` 自定义端点
+- **OpenAI tool calling**: 修复 `tool_call_id` 和 `tool_calls` 序列化（多轮工具调用）
+- **reasoning_content**: 不回传 API 请求以避免代理签名问题
+
+### Modified
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `OpenAICompatibleProvider.java` | base URL 支持 + tool calling 修复 + reasoning_content |
+| `TelegramBot.java` | 从配置连接 `allowFrom` / `groupAllowFrom` |
+| `TelegramBotHelpers.java` | 新增 `resolveGroupAllowFrom()` |
+| `ChannelBeanConfig.java` | 改进 WeChat adapter 注册 |
+
+### Added (Docs)
+
+| 文档 | 说明 |
+|------|------|
+| `telegram-bot-setup.md` | Telegram Bot 部署 + 白名单配置指南 |
+| `wechat-setup.md` | 微信公众号完整接入指南 |
+| `channel-configuration.md` | 渠道配置总览 |
+
+---
+
+## 测试补全 (2026-02-14)
+
+### Added (Tests)
+
+| 测试文件 | 说明 |
+|----------|------|
+| `TelegramFormatTest.java` | HTML 转义、链接构建、inline 格式、代码块 |
+| `TelegramSendTest.java` | chat ID 归一化、消息 ID 验证、解析错误检测 |
+| `TelegramBotUpdatesTest.java` | 去重缓存、update key、media group 合批 |
+| `TelegramBotAccessTest.java` | allow-list 归一化、发送者匹配 (ID/username/wildcard) |
+| `TelegramWebhookTest.java` | webhook 路径生成 |
+| `WebSocketProtocolTest.java` | health / models.list / agent.list / invalid frame |
+| `OpenAiApiIntegrationTest.java` | /v1/chat/completions / /v1/models |
+
+> Telegram 模块 67 个单元测试 + WebSocket/OpenAI 集成测试
+
+### Fixed
+
+- `NetUtils.isLoopbackAddress()` 正确处理 IPv6 loopback (`::1`)
+- maven-surefire/failsafe 插件配置分离单元/集成测试
+
+---
+
 ## Phase 31 — 微信公众号渠道整合 (9 new Java files)
 
 ### Added
