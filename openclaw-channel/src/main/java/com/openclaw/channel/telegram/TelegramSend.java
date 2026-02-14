@@ -1,6 +1,7 @@
 package com.openclaw.channel.telegram;
 
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -129,5 +130,67 @@ public final class TelegramSend {
         if (errorMessage == null)
             return false;
         return PARSE_ERR_RE.matcher(errorMessage).find();
+    }
+
+    // =========================================================================
+    // Send / edit convenience methods
+    // =========================================================================
+
+    /**
+     * Send a text message to a Telegram chat.
+     */
+    public static String sendMessage(String token, String chatId, String text,
+            String replyToMessageId, Integer messageThreadId,
+            String replyToMode) {
+        return sendMessage(token, chatId, text, replyToMessageId,
+                messageThreadId, replyToMode, null);
+    }
+
+    /**
+     * Send a text message with optional inline keyboard.
+     */
+    public static String sendMessage(String token, String chatId, String text,
+            String replyToMessageId, Integer messageThreadId,
+            String replyToMode, Map<String, Object> inlineKeyboard) {
+
+        StringBuilder json = new StringBuilder("{");
+        json.append("\"chat_id\":\"").append(escapeJson(chatId)).append("\"");
+        json.append(",\"text\":\"").append(escapeJson(text)).append("\"");
+        json.append(",\"parse_mode\":\"Markdown\"");
+
+        if (replyToMessageId != null && !replyToMessageId.isBlank()) {
+            json.append(",\"reply_to_message_id\":").append(replyToMessageId);
+        }
+        if (messageThreadId != null) {
+            json.append(",\"message_thread_id\":").append(messageThreadId);
+        }
+        json.append("}");
+
+        return TelegramFetch.callApi(token, "sendMessage", json.toString());
+    }
+
+    /**
+     * Edit an existing message.
+     */
+    public static String editMessage(String token, String chatId,
+            Integer messageId, String text) {
+
+        StringBuilder json = new StringBuilder("{");
+        json.append("\"chat_id\":\"").append(escapeJson(chatId)).append("\"");
+        json.append(",\"message_id\":").append(messageId);
+        json.append(",\"text\":\"").append(escapeJson(text)).append("\"");
+        json.append(",\"parse_mode\":\"Markdown\"");
+        json.append("}");
+
+        return TelegramFetch.callApi(token, "editMessageText", json.toString());
+    }
+
+    private static String escapeJson(String value) {
+        if (value == null)
+            return "";
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
     }
 }
