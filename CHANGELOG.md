@@ -1,5 +1,39 @@
 # Changelog
 
+## Phase 31 — 微信公众号渠道整合 (9 new Java files)
+
+### Added
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `WeChatTypes.java` | 数据类 — 配置(`WeChatConfig`)、消息 DTO(`WeChatIncomingMessage`)、token 响应 |
+| `WeChatXmlUtils.java` | XML 解析 + SHA-1 签名验证 + 被动回复 XML 构建 |
+| `WeChatAccessToken.java` | access_token 获取与 Caffeine 缓存（110 分钟 TTL）+ 刷新/失效 |
+| `WeChatOutboundAdapter.java` | 实现 `ChannelOutboundAdapter`，通过客服消息 API 发送文本/媒体 |
+| `WeChatMessageHandler.java` | 入站消息路由（text/image/voice/event）+ Agent 集成占位 |
+| `WeChatWebhookController.java` | Webhook 处理核心（GET 验证 + POST 消息接收） |
+| `WeChatWebhookRouterConfig.java` | Spring MVC `RouterFunction` 条件注册 — 仅在微信配置存在时注册路由 |
+| `WeChatChannelPlugin.java` | 渠道插件入口（初始化、组件组装） |
+
+### Added (Tests)
+
+| 测试文件 | 说明 |
+|----------|------|
+| `WeChatXmlUtilsTest.java` | 10 tests — 签名验证、XML 解析（text/image/event/location）、回复构建 |
+| `WeChatMessageHandlerTest.java` | 8 tests — 各消息类型处理、边界条件 |
+
+### Modified
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `ChannelBeanConfig.java` | 新增 WeChat `OutboundAdapter` 自动注册（config/env 双路解析） |
+
+### Fixed
+
+- 修复因 `@RestController` 组件扫描导致的服务启动失败 — 改用 `RouterFunction` 条件注册
+
+---
+
 ## Phase 30 — Channels 桥接层 (5 new Java files)
 
 ### Added

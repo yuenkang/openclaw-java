@@ -5,6 +5,7 @@ import com.openclaw.channel.dock.ChannelDock;
 import com.openclaw.channel.registry.ChannelRegistry;
 import com.openclaw.channel.routing.TargetResolver;
 import com.openclaw.channel.telegram.TelegramOutboundAdapter;
+import com.openclaw.channel.wechat.WeChatOutboundAdapter;
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
 import lombok.extern.slf4j.Slf4j;
@@ -76,6 +77,26 @@ public class ChannelBeanConfig {
 
         if (tgToken != null) {
             service.registerAdapter(new TelegramOutboundAdapter(tgToken));
+        }
+
+        // Auto-register WeChat if configured
+        try {
+            OpenClawConfig cfg = configService.loadConfig();
+            if (cfg.getChannels() != null && cfg.getChannels().getProviders() != null) {
+                Object wechatProvider = cfg.getChannels().getProviders().get("wechat");
+                if (wechatProvider instanceof java.util.Map) {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> wechatMap = (java.util.Map<String, Object>) wechatProvider;
+                    String appId = wechatMap.get("appId") instanceof String s ? s : System.getenv("WECHAT_APP_ID");
+                    String appSecret = wechatMap.get("appSecret") instanceof String s ? s
+                            : System.getenv("WECHAT_APP_SECRET");
+                    if (appId != null && !appId.isBlank() && appSecret != null && !appSecret.isBlank()) {
+                        service.registerAdapter(new WeChatOutboundAdapter(appId, appSecret));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("No WeChat config found: {}", e.getMessage());
         }
 
         return service;
