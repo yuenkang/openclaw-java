@@ -11,6 +11,7 @@ import com.openclaw.gateway.protocol.ProtocolTypes;
 import com.openclaw.gateway.protocol.ProtocolTypes.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.*;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.net.InetAddress;
@@ -54,7 +55,9 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String connId = session.getId();
-        GatewayConnection connection = new GatewayConnection(connId, session);
+        // Wrap session for thread-safe message sending from any thread
+        WebSocketSession concurrentSession = new ConcurrentWebSocketSessionDecorator(session, 5000, 512 * 1024);
+        GatewayConnection connection = new GatewayConnection(connId, concurrentSession);
         connections.put(connId, connection);
 
         Map<String, Object> attrs = session.getAttributes();

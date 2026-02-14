@@ -38,7 +38,9 @@ class AppEndToEndTest {
 
     @BeforeEach
     void connect() throws Exception {
-        StandardWebSocketClient client = new StandardWebSocketClient();
+        jakarta.websocket.WebSocketContainer container = jakarta.websocket.ContainerProvider.getWebSocketContainer();
+        container.setDefaultMaxTextMessageBufferSize(256 * 1024);
+        StandardWebSocketClient client = new StandardWebSocketClient(container);
         URI uri = URI.create("ws://127.0.0.1:" + port + "/ws");
 
         session = client.execute(new TextWebSocketHandler() {
@@ -92,9 +94,28 @@ class AppEndToEndTest {
         frame.put("method", method);
         frame.put("params", params != null ? params : Map.of());
         session.sendMessage(new TextMessage(mapper.writeValueAsString(frame)));
-        String raw = messages.poll(5, TimeUnit.SECONDS);
-        assertNotNull(raw, "No response for " + method);
-        return mapper.readTree(raw);
+
+        // Poll until we find the response matching our request ID.
+        // Broadcast events or responses for other IDs are discarded.
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (true) {
+            long remaining = deadline - System.currentTimeMillis();
+            if (remaining <= 0)
+                break;
+            String raw = messages.poll(remaining, TimeUnit.MILLISECONDS);
+            assertNotNull(raw, "No response for " + method);
+            JsonNode node = mapper.readTree(raw);
+            // Skip broadcast events (they have "event" field, no "id")
+            if (node.has("event") && !node.has("id"))
+                continue;
+            // Match by response ID
+            if (node.has("id") && id.equals(node.get("id").asText())) {
+                return node;
+            }
+            // Otherwise discard (response for a different request or unknown frame)
+        }
+        fail("Timed out waiting for response to " + method + " (id=" + id + ")");
+        return null; // unreachable
     }
 
     private JsonNode rpcOk(String id, String method, Object params) throws Exception {
