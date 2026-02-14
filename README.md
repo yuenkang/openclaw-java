@@ -19,7 +19,7 @@ OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gatewa
 │ Outbound   │   Memory    │  Onboarding  │                     │
 ├────────────┴─────────────┴──────────────┴─────────────────────┤
 │                          common                                │
-│    Config · Models · JSON-RPC · Sessions · Auth · Media · CLI  │
+│    Config · Models · Protocol · Sessions · Auth · Media · CLI  │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -27,7 +27,7 @@ OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gatewa
 
 | 模块 | 文件数 | 说明 |
 |------|--------|------|
-| `openclaw-common` | 32 | 配置管理 (OpenClawConfig)、数据模型、JSON-RPC 类型、认证 (Auth Profile)、CLI 参数解析 |
+| `openclaw-common` | 32 | 配置管理 (OpenClawConfig)、数据模型、协议类型定义、认证 (Auth Profile)、CLI 参数解析 |
 | `openclaw-gateway` | 109 | WebSocket 服务器、会话管理、方法路由 (MethodRouter)、Cron 调度、出站消息投递 (Outbound)、运行时重载 |
 | `openclaw-agent` | 329 | Agent 执行引擎、多模型提供者 (Anthropic/OpenAI/Ollama)、内置工具 (Exec/File/Browser)、指令处理、Hooks、Memory |
 | `openclaw-channel` | 96 | 渠道注册 (Registry)、消息投递 (Dock)、ACK 反应、Telegram Bot 完整层 (18 文件)、Discord 适配器、出站适配器 |
