@@ -1,6 +1,6 @@
 # OpenClaw Java
 
-OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gateway，覆盖 Agent 运行时、多渠道消息、Hooks/Cron 调度等完整功能。
+OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gateway，通过 WebSocket 自定义帧协议（req/res/event）提供全功能 Agent 接口。
 
 > **当前进度**: Phase 30 / 576 个源文件 / ~83,000 行 Java 代码
 
@@ -13,7 +13,7 @@ OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gatewa
 ├────────────┬─────────────┬──────────────┬─────────────────────┤
 │  gateway   │    agent    │   channel    │      plugin         │
 │ WebSocket  │   Runtime   │  Adapters    │       SPI           │
-│ JSON-RPC   │   LLM Loop │  Telegram    │     Loader          │
+│ RPC Route  │   LLM Loop │  Telegram    │     Loader          │
 │ Session    │   Tools     │  Discord     │    Registry         │
 │ Cron       │   Hooks     │  Outbound    │                     │
 │ Outbound   │   Memory    │  Onboarding  │                     │
@@ -28,7 +28,7 @@ OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gatewa
 | 模块 | 文件数 | 说明 |
 |------|--------|------|
 | `openclaw-common` | 32 | 配置管理 (OpenClawConfig)、数据模型、JSON-RPC 类型、认证 (Auth Profile)、CLI 参数解析 |
-| `openclaw-gateway` | 109 | WebSocket 服务器、会话管理、RPC 路由、Cron 调度、出站消息投递 (Outbound)、运行时重载 |
+| `openclaw-gateway` | 109 | WebSocket 服务器、会话管理、方法路由 (MethodRouter)、Cron 调度、出站消息投递 (Outbound)、运行时重载 |
 | `openclaw-agent` | 329 | Agent 执行引擎、多模型提供者 (Anthropic/OpenAI/Ollama)、内置工具 (Exec/File/Browser)、指令处理、Hooks、Memory |
 | `openclaw-channel` | 96 | 渠道注册 (Registry)、消息投递 (Dock)、ACK 反应、Telegram Bot 完整层 (18 文件)、Discord 适配器、出站适配器 |
 | `openclaw-plugin` | 5 | SPI 插件加载器、注册中心、清单解析 |
@@ -80,46 +80,62 @@ mvn spring-boot:run -pl openclaw-app
 mvn test
 ```
 
-## RPC 方法
+## WebSocket 协议
 
-通过 WebSocket 发送 JSON-RPC 2.0 消息：
+采用自定义帧协议 (与 TypeScript 版本对齐)，**非 JSON-RPC**：
 
-### 系统
+### 帧格式
+
+| 类型 | 格式 | 说明 |
+|------|------|------|
+| Request | `{"type":"req", "id":"1", "method":"...", "params":{}}` | 客户端→服务端请求 |
+| Response | `{"type":"res", "id":"1", "ok":true, "payload":{}}` | 服务端→客户端响应 |
+| Event | `{"type":"event", "event":"...", "payload":{}}` | 服务端→客户端事件推送 |
+
+### 握手流程
+
+```
+服务端 → connect.challenge {nonce, ts}
+客户端 → req {method:"connect", params:{client, role, auth, scopes}}
+服务端 → res {payload: hello-ok {protocol, server, features, snapshot}}
+```
+
+### 方法示例
 
 ```json
 // 状态检查
-{"jsonrpc":"2.0","id":1,"method":"status","params":{}}
+{"type":"req","id":"1","method":"status","params":{}}
 
 // 获取配置
-{"jsonrpc":"2.0","id":2,"method":"config.get","params":{}}
+{"type":"req","id":"2","method":"config.get","params":{}}
 
 // 重载配置
-{"jsonrpc":"2.0","id":3,"method":"config.reload","params":{}}
+{"type":"req","id":"3","method":"config.reload","params":{}}
 ```
 
 ### 会话管理
 
 ```json
 // 创建会话
-{"jsonrpc":"2.0","id":4,"method":"session.create","params":{"sessionKey":"my-session","cwd":"/tmp"}}
+{"type":"req","id":"4","method":"session.create","params":{"sessionKey":"my-session","cwd":"/tmp"}}
 
 // 列出会话
-{"jsonrpc":"2.0","id":5,"method":"session.list","params":{}}
+{"type":"req","id":"5","method":"session.list","params":{}}
 
 // 取消运行
-{"jsonrpc":"2.0","id":6,"method":"session.cancel","params":{"sessionId":"xxx"}}
+{"type":"req","id":"6","method":"session.cancel","params":{"sessionId":"xxx"}}
 ```
 
 ### Agent 对话
 
 ```json
 // 快速对话
-{"jsonrpc":"2.0","id":7,"method":"agent.message","params":{
+{"type":"req","id":"7","method":"agent.message","params":{
   "message":"你好，请介绍一下你自己"
 }}
 
 // 完整控制
-{"jsonrpc":"2.0","id":8,"method":"agent.run","params":{
+{"type":"req","id":"8","method":"agent.run","params":{
   "modelId":"anthropic/claude-sonnet-4-5",
   "messages":[{"role":"user","content":"帮我写一个 hello world"}],
   "systemPrompt":"You are a helpful assistant",
@@ -131,10 +147,10 @@ mvn test
 
 ```json
 // 列出定时任务
-{"jsonrpc":"2.0","id":9,"method":"cron.list","params":{}}
+{"type":"req","id":"9","method":"cron.list","params":{}}
 
 // 强制执行  
-{"jsonrpc":"2.0","id":10,"method":"cron.force","params":{"jobId":"xxx"}}
+{"type":"req","id":"10","method":"cron.force","params":{"jobId":"xxx"}}
 ```
 
 ## 核心模块详解
