@@ -179,6 +179,8 @@ public class AgentRunner {
 
         List<AgentEvent> events = new ArrayList<>();
         int turns = 0;
+        // Aggregate usage across all LLM calls
+        ModelProvider.Usage totalUsage = new ModelProvider.Usage(0, 0, 0, 0);
 
         while (turns < maxTurns) {
             turns++;
@@ -256,6 +258,16 @@ public class AgentRunner {
                     .usage(response.getUsage())
                     .build());
 
+            // Accumulate usage from this turn
+            if (response.getUsage() != null) {
+                totalUsage.setInputTokens(totalUsage.getInputTokens() + response.getUsage().getInputTokens());
+                totalUsage.setOutputTokens(totalUsage.getOutputTokens() + response.getUsage().getOutputTokens());
+                totalUsage
+                        .setCacheReadTokens(totalUsage.getCacheReadTokens() + response.getUsage().getCacheReadTokens());
+                totalUsage.setCacheWriteTokens(
+                        totalUsage.getCacheWriteTokens() + response.getUsage().getCacheWriteTokens());
+            }
+
             // Check if there are tool calls
             if (response.getToolUses() == null || response.getToolUses().isEmpty()) {
                 // No tool calls — final response
@@ -266,6 +278,7 @@ public class AgentRunner {
                                 response.getMessage() != null ? response.getMessage().getReasoningContent() : null)
                         .events(events)
                         .turns(turns)
+                        .totalUsage(totalUsage)
                         .build();
             }
 
@@ -317,6 +330,7 @@ public class AgentRunner {
                 .error("Max turns exceeded (" + maxTurns + ")")
                 .events(events)
                 .turns(turns)
+                .totalUsage(totalUsage)
                 .build();
         triggerRunEnd(context, maxTurnsResult);
         return maxTurnsResult;
