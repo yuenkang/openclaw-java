@@ -221,4 +221,78 @@ class WebSocketIntegrationTest {
 
         rawSession.close();
     }
+
+    @Test
+    @org.junit.jupiter.api.Order(9)
+    void rpcHealth_returnsSystemInfo() throws Exception {
+        JsonNode json = sendRequest("9", "health", null);
+        assertEquals("9", json.get("id").asText());
+        assertTrue(json.get("ok").asBoolean());
+        JsonNode payload = json.get("payload");
+        assertNotNull(payload);
+        assertEquals("ok", payload.get("status").asText());
+        assertNotNull(payload.get("version"));
+        assertNotNull(payload.get("uptimeMs"));
+        // Verify runtime info
+        JsonNode runtime = payload.get("runtime");
+        assertNotNull(runtime, "Expected runtime info in health response");
+        assertNotNull(runtime.get("javaVersion"));
+        assertNotNull(runtime.get("os"));
+        assertTrue(runtime.get("maxMemoryMb").asInt() > 0);
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(10)
+    void rpcModelsList_returnsModels() throws Exception {
+        JsonNode json = sendRequest("10", "models.list", null);
+        assertEquals("10", json.get("id").asText());
+        assertTrue(json.get("ok").asBoolean());
+        JsonNode payload = json.get("payload");
+        assertNotNull(payload);
+        assertTrue(payload.has("models"), "Expected 'models' key in response");
+        assertTrue(payload.get("models").isArray());
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(11)
+    void rpcAgentList_returnsArray() throws Exception {
+        JsonNode json = sendRequest("11", "agent.list", null);
+        assertEquals("11", json.get("id").asText());
+        assertTrue(json.get("ok").asBoolean());
+        JsonNode payload = json.get("payload");
+        assertNotNull(payload);
+        assertTrue(payload.has("agents"), "Expected 'agents' key in response");
+        assertTrue(payload.get("agents").isArray());
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(12)
+    void invalidFrameType_returnsError() throws Exception {
+        // Send a frame with an invalid type after handshake
+        String badFrame = mapper.writeValueAsString(Map.of(
+                "type", "garbage", "data", "test"));
+        session.sendMessage(new TextMessage(badFrame));
+
+        String errorMsg = messages.poll(5, TimeUnit.SECONDS);
+        assertNotNull(errorMsg, "Expected error for invalid frame type");
+        JsonNode error = mapper.readTree(errorMsg);
+        assertFalse(error.get("ok").asBoolean());
+        assertEquals("INVALID_REQUEST", error.get("error").get("code").asText());
+        assertTrue(error.get("error").get("message").asText().contains("invalid frame type"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(13)
+    void invalidFrameType_noId_returnsError() throws Exception {
+        // Send a req frame with missing id/method
+        String badFrame = mapper.writeValueAsString(Map.of(
+                "type", "req"));
+        session.sendMessage(new TextMessage(badFrame));
+
+        String errorMsg = messages.poll(5, TimeUnit.SECONDS);
+        assertNotNull(errorMsg, "Expected error for invalid req frame");
+        JsonNode error = mapper.readTree(errorMsg);
+        assertFalse(error.get("ok").asBoolean());
+        assertEquals("INVALID_REQUEST", error.get("error").get("code").asText());
+    }
 }
