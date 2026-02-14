@@ -1,11 +1,5 @@
 package com.openclaw.gateway.outbound;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.Builder;
-import lombok.Data;
-
-import java.util.Map;
-
 /**
  * Outbound delivery JSON representation and formatting utilities.
  * Corresponds to TypeScript's format.ts.
