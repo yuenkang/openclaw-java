@@ -46,10 +46,17 @@ public class TelegramChannelPlugin {
         // Apply proxy if configured
         TelegramProxy.applyProxySettings();
 
+        // Resolve allow-from lists
+        var tgConfig = TelegramBotHelpers.resolveTelegramAccountConfig(config, null);
+        var allowFrom = TelegramBotHelpers.resolveAllowFrom(tgConfig);
+        var groupAllowFrom = TelegramBotHelpers.resolveGroupAllowFrom(tgConfig);
+
         // Create bot options
         TelegramBot.TelegramBotOptions options = TelegramBot.TelegramBotOptions.builder()
                 .token(token)
                 .accountId(accountId)
+                .allowFrom(allowFrom)
+                .groupAllowFrom(groupAllowFrom)
                 .config(config)
                 .build();
 
@@ -97,9 +104,24 @@ public class TelegramChannelPlugin {
         if (tgConfig == null)
             return null;
 
-        Object token = tgConfig.get("token");
-        if (token instanceof String s)
+        // Check botToken first (primary config key), then token as fallback
+        Object token = tgConfig.get("botToken");
+        if (token == null)
+            token = tgConfig.get("token");
+        if (token instanceof String s && !s.isBlank())
             return s;
+
+        // Check tokenFile
+        Object tokenFile = tgConfig.get("tokenFile");
+        if (tokenFile instanceof String s && !s.isBlank()) {
+            try {
+                String fileToken = java.nio.file.Files.readString(java.nio.file.Path.of(s)).trim();
+                if (!fileToken.isEmpty())
+                    return fileToken;
+            } catch (Exception e) {
+                log.warn("Failed to read token file: {}", s);
+            }
+        }
 
         // Check env
         String envToken = System.getenv("TELEGRAM_BOT_TOKEN");

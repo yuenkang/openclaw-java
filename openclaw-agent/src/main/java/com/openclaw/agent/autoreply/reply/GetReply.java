@@ -1,5 +1,7 @@
 package com.openclaw.agent.autoreply.reply;
 
+import com.openclaw.common.config.OpenClawConfig;
+import com.openclaw.common.config.OpenClawConfig.AgentEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,18 +23,44 @@ public final class GetReply {
     private GetReply() {
     }
 
-    // --- Skill filter merge ---
+    // =========================================================================
+    // ChatRunner — injectable agent execution callback
+    // =========================================================================
 
     /**
-     * Merge channel-level and agent-level skill filters.
-     *
-     * <ul>
-     * <li>Both null → null (no filtering)</li>
-     * <li>One null → use the other</li>
-     * <li>Both present → intersection</li>
-     * <li>Either empty list → empty (block all)</li>
-     * </ul>
+     * Functional interface for running an agent chat turn.
+     * Injected from the app module (wraps runtime AgentRunner).
      */
+    @FunctionalInterface
+    public interface ChatRunner {
+        /**
+         * Run a chat turn with the given parameters.
+         *
+         * @param sessionKey   session identifier
+         * @param userMessage  the user's message (body)
+         * @param systemPrompt system prompt (nullable)
+         * @param modelId      resolved model identifier (e.g.
+         *                     "anthropic/claude-sonnet-4-5")
+         * @param config       current OpenClawConfig
+         * @return CompletableFuture with the agent's reply text
+         */
+        CompletableFuture<String> run(
+                String sessionKey,
+                String userMessage,
+                String systemPrompt,
+                String modelId,
+                OpenClawConfig config);
+    }
+
+    private static volatile ChatRunner chatRunner;
+
+    /** Set the chat runner. Called once at startup by TelegramAgentWiring. */
+    public static void setChatRunner(ChatRunner runner) {
+        chatRunner = runner;
+    }
+
+    // --- Skill filter merge ---
+
     static List<String> mergeSkillFilters(List<String> channelFilter, List<String> agentFilter) {
         List<String> channel = normalizeFilterList(channelFilter);
         List<String> agent = normalizeFilterList(agentFilter);
@@ -57,122 +85,208 @@ public final class GetReply {
                 .toList();
     }
 
+    // =========================================================================
+    // Main entry point
+    // =========================================================================
+
     /**
      * Main entry point — get reply from config for an inbound message.
      *
-     * @param ctx            inbound message context
+     * @param ctx            inbound message context (MsgContext)
      * @param opts           reply options (nullable)
      * @param configOverride config override (nullable)
-     * @return reply payloads
+     * @return list of reply payload maps
      */
     @SuppressWarnings("unchecked")
     public static CompletableFuture<List<Map<String, Object>>> getReplyFromConfig(
             Map<String, Object> ctx,
             Map<String, Object> opts,
-            Map<String, Object> configOverride) {
+            OpenClawConfig configOverride) {
 
-        Map<String, Object> cfg = configOverride != null ? configOverride : loadConfig();
+        OpenClawConfig cfg = configOverride != null ? configOverride : loadConfig();
 
-        // 1. Resolve agent identity
+        if (chatRunner == null) {
+            log.warn("No ChatRunner configured — cannot process message");
+            return CompletableFuture.completedFuture(List.of(
+                    Map.of("text", "⚠️ Agent not configured. Please check server setup.")));
+        }
+
+        // 1. Resolve session key
         String targetSessionKey = "native".equals(ctx.get("CommandSource"))
                 ? trimOrNull((String) ctx.get("CommandTargetSessionKey"))
                 : null;
-        String agentSessionKey = targetSessionKey != null ? targetSessionKey
-                : (String) ctx.get("SessionKey");
-        String agentId = resolveSessionAgentId(agentSessionKey, cfg);
+        String sessionKey = targetSessionKey != null ? targetSessionKey
+                : (String) ctx.getOrDefault("SessionKey", "default");
 
-        // 2. Merge skill filters
-        List<String> channelSkillFilter = opts != null
-                ? (List<String>) opts.get("skillFilter")
-                : null;
-        List<String> agentSkillFilter = resolveAgentSkillsFilter(cfg, agentId);
-        List<String> mergedSkillFilter = mergeSkillFilters(channelSkillFilter, agentSkillFilter);
-        Map<String, Object> resolvedOpts = opts;
-        if (mergedSkillFilter != null) {
-            resolvedOpts = new LinkedHashMap<>(opts != null ? opts : Map.of());
-            resolvedOpts.put("skillFilter", mergedSkillFilter);
-        }
+        // 2. Resolve model
+        String modelId = resolveModelId(cfg);
 
-        // 3. Resolve default model
-        Map<String, Object> agentCfg = getAgentDefaults(cfg);
-        // resolveDefaultModel deferred — use placeholders
-        String defaultProvider = "openai";
-        String defaultModel = "gpt-4o";
-        String provider = defaultProvider;
-        String model = defaultModel;
-
-        // 4. Heartbeat model override
-        if (opts != null && Boolean.TRUE.equals(opts.get("isHeartbeat"))) {
-            String heartbeatRaw = agentCfg != null && agentCfg.containsKey("heartbeat")
-                    ? resolveHeartbeatModel(agentCfg)
-                    : null;
-            if (heartbeatRaw != null && !heartbeatRaw.isEmpty()) {
-                // resolveModelRefFromString deferred
-                log.debug("Heartbeat model override: {}", heartbeatRaw);
-            }
-        }
-
-        // 5. Ensure workspace
-        log.debug("Ensuring agent workspace for agent {}", agentId);
-
-        // 6. Finalize inbound context
+        // 3. Finalize inbound context
         InboundContext.finalizeInboundContext(ctx, new InboundContext.FinalizeOptions());
 
-        // 7. Media/link understanding (deferred)
+        // 4. Session init — use existing Session class
+        return Session.initSessionState(ctx, mapFromConfig(cfg), false)
+                .thenCompose(sessionState -> {
+                    String resolvedSessionKey = sessionState.sessionKey();
+                    boolean resetTriggered = sessionState.resetTriggered();
+                    boolean isNewSession = sessionState.isNewSession();
+                    Map<String, Object> sessionCtx = sessionState.sessionCtx();
 
-        // 8. Command authorization
-        log.debug("Resolving command authorization");
+                    // 5. Resolve body for agent
+                    String body = resolveBody(sessionCtx, ctx, resetTriggered);
 
-        // 9. Session init
-        log.debug("Initializing session state for {}", agentSessionKey);
+                    if (body == null || body.trim().isEmpty()) {
+                        log.debug("Empty body after resolution, skipping");
+                        return CompletableFuture.completedFuture(List.<Map<String, Object>>of());
+                    }
 
-        // 10. Resolve directives, inline actions (deferred)
+                    // 6. Build system prompt
+                    String systemPrompt = buildSystemPrompt(cfg, sessionCtx, isNewSession);
 
-        // 11. Stage sandbox media (deferred)
+                    log.info("Running auto-reply: session={} model={} bodyLen={} isNew={}",
+                            resolvedSessionKey, modelId, body.length(), isNewSession);
 
-        // 12. Run prepared reply (deferred)
-
-        log.info("getReplyFromConfig: full pipeline integration deferred");
-        return CompletableFuture.completedFuture(List.of());
+                    // 7. Invoke agent via ChatRunner
+                    return chatRunner.run(resolvedSessionKey, body, systemPrompt, modelId, cfg)
+                            .thenApply(reply -> {
+                                if (reply == null || reply.isBlank()) {
+                                    return List.<Map<String, Object>>of();
+                                }
+                                // Build reply payload
+                                Map<String, Object> payload = new LinkedHashMap<>();
+                                payload.put("text", reply);
+                                return List.of(payload);
+                            })
+                            .exceptionally(ex -> {
+                                log.error("ChatRunner failed: {}", ex.getMessage(), ex);
+                                return List.of(Map.of("text",
+                                        "⚠️ Agent error: " + ex.getMessage()));
+                            });
+                });
     }
 
-    // --- Internal helpers ---
+    // =========================================================================
+    // Internal helpers
+    // =========================================================================
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> loadConfig() {
-        return Map.of();
+    private static OpenClawConfig loadConfig() {
+        // In the full pipeline this reads from ConfigService,
+        // but since we get configOverride from caller, this is a fallback.
+        return new OpenClawConfig();
     }
 
-    private static String resolveSessionAgentId(String sessionKey, Map<String, Object> cfg) {
-        // Full agent scope resolution deferred
-        return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<String> resolveAgentSkillsFilter(Map<String, Object> cfg, String agentId) {
-        return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> getAgentDefaults(Map<String, Object> cfg) {
-        Object agents = cfg.get("agents");
-        if (agents instanceof Map<?, ?> m) {
-            Object defaults = m.get("defaults");
-            if (defaults instanceof Map<?, ?> d) {
-                return (Map<String, Object>) d;
+    /**
+     * Resolve the model to use from config.
+     */
+    private static String resolveModelId(OpenClawConfig cfg) {
+        // Try top-level model shortcut
+        if (cfg.getModel() != null && !cfg.getModel().isBlank()) {
+            return cfg.getModel();
+        }
+        // Try agents.defaults.model.primary
+        if (cfg.getAgents() != null && cfg.getAgents().getDefaults() != null) {
+            var modelCfg = cfg.getAgents().getDefaults().getModel();
+            if (modelCfg != null && modelCfg.getPrimary() != null
+                    && !modelCfg.getPrimary().isBlank()) {
+                return modelCfg.getPrimary();
             }
         }
-        return null;
+        // Try first agent entry model
+        if (cfg.getAgents() != null) {
+            for (AgentEntry entry : cfg.getAgents().getEntries()) {
+                String m = entry.getModelString();
+                if (m != null && !m.isBlank())
+                    return m;
+            }
+        }
+        return "anthropic/claude-sonnet-4-5";
     }
 
-    @SuppressWarnings("unchecked")
-    private static String resolveHeartbeatModel(Map<String, Object> agentCfg) {
-        Object heartbeat = agentCfg.get("heartbeat");
-        if (heartbeat instanceof Map<?, ?> m) {
-            Object model = m.get("model");
-            return model != null ? model.toString().trim() : null;
+    /**
+     * Resolve the body to send to the agent.
+     */
+    private static String resolveBody(
+            Map<String, Object> sessionCtx,
+            Map<String, Object> ctx,
+            boolean resetTriggered) {
+
+        // BodyStripped is set by Session.initSessionState
+        if (sessionCtx.get("BodyStripped") instanceof String stripped && !stripped.isEmpty()) {
+            return stripped;
         }
-        return null;
+        // Fallback to direct body fields
+        if (ctx.get("BodyForAgent") instanceof String body && !body.isEmpty()) {
+            return body;
+        }
+        if (ctx.get("Body") instanceof String body) {
+            return body;
+        }
+        return "";
+    }
+
+    /**
+     * Build a system prompt from config and session context.
+     */
+    @SuppressWarnings("unchecked")
+    private static String buildSystemPrompt(
+            OpenClawConfig cfg,
+            Map<String, Object> sessionCtx,
+            boolean isNewSession) {
+
+        StringBuilder sb = new StringBuilder();
+
+        // Agent persona / system prompt from first agent entry
+        if (cfg.getAgents() != null) {
+            for (AgentEntry entry : cfg.getAgents().getEntries()) {
+                if (entry.getSystemPrompt() != null && !entry.getSystemPrompt().isBlank()) {
+                    sb.append(entry.getSystemPrompt());
+                    break; // use first agent's prompt
+                }
+            }
+        }
+
+        // Add channel context hints
+        if (sessionCtx.get("Provider") instanceof String provider) {
+            if (sb.length() > 0)
+                sb.append("\n\n");
+            sb.append("You are responding via ").append(provider).append(". ");
+            sb.append("Keep responses concise and formatted for messaging. ");
+            sb.append("Do not use markdown headers.");
+        }
+
+        // Group context
+        if (sessionCtx.get("ChatType") instanceof String chatType
+                && !"direct".equals(chatType.toLowerCase())) {
+            sb.append("\nThis is a group chat. ");
+            if (sessionCtx.get("SenderName") instanceof String name) {
+                sb.append("The current message is from: ").append(name).append(". ");
+            }
+        }
+
+        return sb.length() > 0 ? sb.toString() : null;
+    }
+
+    /**
+     * Convert OpenClawConfig to a Map for Session.initSessionState.
+     * Uses a simple extraction of session-relevant fields.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mapFromConfig(OpenClawConfig cfg) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (cfg.getSession() != null) {
+            Map<String, Object> sessionMap = new LinkedHashMap<>();
+            if (cfg.getSession().getScope() != null)
+                sessionMap.put("scope", cfg.getSession().getScope());
+            if (cfg.getSession().getResetTriggers() != null)
+                sessionMap.put("resetTriggers", cfg.getSession().getResetTriggers());
+            if (cfg.getSession().getMainKey() != null)
+                sessionMap.put("mainKey", cfg.getSession().getMainKey());
+            map.put("session", sessionMap);
+        }
+        if (cfg.getModel() != null) {
+            map.put("model", cfg.getModel());
+        }
+        return map;
     }
 
     private static String trimOrNull(String s) {

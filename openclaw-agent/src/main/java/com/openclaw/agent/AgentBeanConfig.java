@@ -82,7 +82,14 @@ public class AgentBeanConfig {
 
         String openaiKey = System.getenv("OPENAI_API_KEY");
         if (openaiKey != null && !openaiKey.isBlank()) {
-            registry.register(new OpenAICompatibleProvider(openaiKey));
+            String openaiBaseUrl = System.getenv("OPENAI_BASE_URL");
+            if (openaiBaseUrl != null && !openaiBaseUrl.isBlank()) {
+                registry.register(new OpenAICompatibleProvider("openai", openaiKey, openaiBaseUrl));
+                log.info("OpenAI provider registered with custom base URL: {}", openaiBaseUrl);
+            } else {
+                registry.register(new OpenAICompatibleProvider(openaiKey));
+                log.info("OpenAI provider registered with default base URL");
+            }
         }
 
         // Ollama (no API key needed)

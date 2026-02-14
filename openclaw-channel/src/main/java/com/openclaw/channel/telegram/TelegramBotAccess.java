@@ -156,7 +156,13 @@ public class TelegramBotAccess {
         List<String> allowFrom = TelegramBotHelpers.resolveAllowFrom(tgConfig);
         NormalizedAllowFrom normalized = normalizeAllowFrom(allowFrom);
 
-        return isSenderAllowed(normalized, senderId, senderUsername);
+        log.debug("Access check: senderId={} senderUsername={} allowFrom={} normalized={} hasEntries={} hasWildcard={}",
+                senderId, senderUsername, allowFrom, normalized.entries(), normalized.hasEntries(),
+                normalized.hasWildcard());
+
+        boolean result = isSenderAllowed(normalized, senderId, senderUsername);
+        log.debug("Access check result: {} for senderId={} senderUsername={}", result, senderId, senderUsername);
+        return result;
     }
 
     @SafeVarargs

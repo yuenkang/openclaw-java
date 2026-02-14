@@ -324,7 +324,42 @@ public class OpenAICompatibleProvider implements ModelProvider {
             messages.add(Map.of("role", "system", "content", request.getSystemPrompt()));
         }
         for (ChatMessage msg : request.getMessages()) {
-            messages.add(Map.of("role", msg.getRole(), "content", msg.getContent()));
+            if ("tool".equals(msg.getRole())) {
+                // Tool result messages require tool_call_id
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("role", "tool");
+                m.put("tool_call_id", msg.getToolUseId());
+                m.put("content", msg.getContent() != null ? msg.getContent() : "");
+                messages.add(m);
+            } else if ("assistant".equals(msg.getRole()) && msg.getToolUses() != null && !msg.getToolUses().isEmpty()) {
+                // Assistant messages with tool calls
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("role", "assistant");
+                if (msg.getContent() != null && !msg.getContent().isEmpty()) {
+                    m.put("content", msg.getContent());
+                }
+                List<Map<String, Object>> toolCalls = new ArrayList<>();
+                for (ToolUse tu : msg.getToolUses()) {
+                    String argsJson;
+                    try {
+                        argsJson = objectMapper.writeValueAsString(
+                                tu.getInput() != null ? tu.getInput() : Map.of());
+                    } catch (JsonProcessingException e) {
+                        argsJson = "{}";
+                    }
+                    toolCalls.add(Map.of(
+                            "id", tu.getId(),
+                            "type", "function",
+                            "function", Map.of(
+                                    "name", tu.getName(),
+                                    "arguments", argsJson)));
+                }
+                m.put("tool_calls", toolCalls);
+                messages.add(m);
+            } else {
+                messages.add(Map.of("role", msg.getRole(), "content",
+                        msg.getContent() != null ? msg.getContent() : ""));
+            }
         }
         body.put("messages", messages);
 
