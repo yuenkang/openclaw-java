@@ -255,6 +255,31 @@ public class CronService {
                 .toList();
     }
 
+    /**
+     * Start scheduling all enabled jobs.
+     */
+    public void start() {
+        for (CronJob job : jobs.values()) {
+            if (job.isEnabled()) {
+                scheduleJob(job);
+            }
+        }
+        log.info("Cron service started with {} jobs ({} enabled)",
+                jobs.size(),
+                jobs.values().stream().filter(CronJob::isEnabled).count());
+    }
+
+    /**
+     * Stop all scheduled jobs and shut down the scheduler.
+     */
+    public void stop() {
+        for (ScheduledFuture<?> task : scheduledTasks.values()) {
+            task.cancel(false);
+        }
+        scheduledTasks.clear();
+        shutdown();
+    }
+
     public void shutdown() {
         scheduler.shutdown();
     }

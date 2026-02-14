@@ -1,5 +1,98 @@
 # Changelog
 
+## Phase 25 — Hooks/Plugins/Cron 模块补齐 (9 Java files, +1565 lines)
+
+### Added
+
+**hooks/ (3 files)**
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `HookTypes.java` | `hooks/types.ts` | Hook 类型定义 (HookEntry/HookMetadata/HookScope/HookConfig) |
+| `HookLoader.java` | `hooks/loader.ts` | Hook 文件发现 + YAML frontmatter 解析 + 多源加载 (workspace/bundled/managed) |
+| `HookStatus.java` | `hooks/hooks-status.ts` | Hook 状态上报 + 错误收集 |
+
+**plugins/ (2 files)**
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `PluginTypes.java` | `plugins/types.ts` | 插件类型完善 — lifecycle hooks/slots/commands/tools/channel adapters |
+| `PluginManifest.java` | `plugins/manifest.ts` | 插件清单 JSON 加载 + 验证 |
+
+**cron/ (4 files)**
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `CronTypes.java` | `cron/types.ts` | Cron 丰富类型 (CronJobConfig/CronEvent/CronRunRecord/CronSchedule) |
+| `CronParse.java` | `cron/service/parse.ts` | Cron 表达式解析 + 下次运行时间计算 |
+| `CronNormalize.java` | `cron/service/normalize.ts` | Cron job 配置规范化 + 默认值填充 |
+| `CronDeliveryResolver.java` | `cron/delivery.ts` | Cron 投递目标解析 (agent/session/channel 路由) |
+
+---
+
+## Phase 24.5 — Media/Memory 基础设施模块 (8 Java files, +1361 lines)
+
+### Added
+
+**media/ (4 files)**
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `MediaConstants.java` | `media/constants.ts` | 媒体常量 (大小限制/支持格式/MIME 映射) |
+| `MimeDetector.java` | `media/mime.ts` | MIME 检测 — 扩展名映射 + magic byte 嗅探 |
+| `MediaFetcher.java` | `media/fetch.ts` | HTTP 下载 + 重定向跟踪 + Content-Disposition 解析 |
+| `MediaStore.java` | `media/store.ts` | 本地文件存储 + TTL 清理 |
+
+**memory/ (4 files)**
+
+| Java 文件 | 对应 TS 源 | 说明 |
+|-----------|-----------|------|
+| `MemoryTypes.java` | `memory/types.ts` | 记忆系统类型 (MemoryEntry/MemorySearchResult/MemoryConfig) |
+| `MemorySearchManager.java` | `memory/search-manager.ts` | 关键字搜索实现 (向量搜索延后) |
+| `MemoryIndexManager.java` | `memory/manager.ts` | 文件系统扫描缓存 + 去重 |
+| `MemoryBackendConfig.java` | `memory/backend-config.ts` | 记忆后端配置解析 |
+
+### Modified
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `OpenClawConfig.java` | `MemoryConfig` 新增 `backend`/`citations` 字段 |
+
+---
+
+## Phase 24 — 编译错误全面修复 (22 Java files)
+
+### Fixed
+
+修复 agent/gateway/common 模块共 22 个文件的编译错误，`mvn compile` + `mvn test` 全通过 (8/8)：
+
+| 文件 | 修复内容 |
+|------|---------|
+| `AgentRunnerExecution.java` | 类型引用修正 |
+| `AgentRunnerMemory.java` | 方法签名修正 |
+| `AgentRunnerPayloads.java` | 类型引用修正 |
+| `BashCommand.java` | `trimStart` → `stripLeading`，`stripMentions` 参数修正 |
+| `DirectiveHandlingFastLane.java` | `AutoReplyTypes` 导入修正 |
+| `DirectiveHandlingImpl.java` | 导入路径修正 |
+| `DirectiveHandlingQueueValidation.java` | 导入补全 |
+| `FollowupRunner.java` | 方法签名适配 |
+| `GetReply.java` | 方法签名修正 |
+| `GetReplyDirectives.java` | 全面重构方法签名 |
+| `History.java` | 类型修正 |
+| `ModelCatalogService.java` | 类型修正 |
+| `ModelSelector.java` | 方法签名修正 |
+| `ToolPolicy.java` | `SandboxToolsConfig` 适配 |
+| `SessionStatusTool.java` | 类型修正 |
+| `ChannelBeanConfig.java` | Bean 装配修正 |
+| `OpenClawConfig.java` | 添加 `SandboxConfig`/`sandbox`/`model` 字段 |
+| `ChatAbortController.java` | volatile record → AtomicBoolean class |
+| `ConfigReloadService.java` | 签名适配 |
+| `HooksService.java` | 签名适配 |
+| `SessionChannelMethodRegistrar.java` | 签名适配 |
+| `GatewayBroadcaster.java` | 签名适配 |
+
+---
+
 ## Phase 23 — Channels Batch 2: Telegram 适配器 + Discord 适配器 (30 Java files, +2903 lines)
 
 ### Batch 1 — Discord + Telegram Token & Accounts

@@ -40,4 +40,12 @@ public class ToolEventRecipientRegistry {
         finalized.add(runId);
         recipients.remove(runId);
     }
+
+    /**
+     * Clear all recipients and finalized state.
+     */
+    public void clear() {
+        recipients.clear();
+        finalized.clear();
+    }
 }
