@@ -85,6 +85,20 @@ public class TelegramBotHelpers {
     }
 
     /**
+     * Resolve group-allow-from list from a Telegram account config.
+     */
+    @SuppressWarnings("unchecked")
+    public static List<String> resolveGroupAllowFrom(Map<String, Object> tgConfig) {
+        if (tgConfig == null)
+            return List.of();
+        Object groupAllowFrom = tgConfig.get("groupAllowFrom");
+        if (groupAllowFrom instanceof List<?> list) {
+            return (List<String>) list;
+        }
+        return List.of();
+    }
+
+    /**
      * Resolve group configuration for a given chat.
      */
     @SuppressWarnings("unchecked")

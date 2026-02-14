@@ -150,26 +150,30 @@ public class AgentRunner {
                             "modelId", context.getModelId() != null ? context.getModelId() : "")));
         }
 
-        // Auto-build system prompt if not provided
-        if (context.getSystemPrompt() == null || context.getSystemPrompt().isBlank()) {
-            // Resolve skills prompt via SkillLoader
-            String skillsPrompt = null;
-            if (context.getConfig() != null) {
-                try {
-                    skillsPrompt = SkillLoader.resolveSkillsPromptForRun(
-                            context.getCwd(), context.getConfig());
-                } catch (Exception e) {
-                    log.debug("Skills prompt generation failed: {}", e.getMessage());
-                }
+        // Build tool-aware system prompt (always include tool definitions)
+        String skillsPrompt = null;
+        if (context.getConfig() != null) {
+            try {
+                skillsPrompt = SkillLoader.resolveSkillsPromptForRun(
+                        context.getCwd(), context.getConfig());
+            } catch (Exception e) {
+                log.debug("Skills prompt generation failed: {}", e.getMessage());
             }
+        }
 
-            String autoPrompt = SystemPromptBuilder.build(
-                    SystemPromptBuilder.SystemPromptParams.builder()
-                            .modelId(context.getModelId())
-                            .workspaceDir(context.getCwd())
-                            .toolNames(new ArrayList<>(toolRegistry.getToolNames()))
-                            .skillsPrompt(skillsPrompt)
-                            .build());
+        String autoPrompt = SystemPromptBuilder.build(
+                SystemPromptBuilder.SystemPromptParams.builder()
+                        .modelId(context.getModelId())
+                        .workspaceDir(context.getCwd())
+                        .toolNames(new ArrayList<>(toolRegistry.getToolNames()))
+                        .skillsPrompt(skillsPrompt)
+                        .build());
+
+        if (context.getSystemPrompt() != null && !context.getSystemPrompt().isBlank()) {
+            // Combine custom system prompt (persona/channel hints) with auto-generated
+            // tool definitions so the model knows about available tools
+            context.setSystemPrompt(context.getSystemPrompt() + "\n\n" + autoPrompt);
+        } else {
             context.setSystemPrompt(autoPrompt);
         }
 

@@ -4,11 +4,15 @@ import com.openclaw.channel.delivery.MessageDeliveryService;
 import com.openclaw.channel.dock.ChannelDock;
 import com.openclaw.channel.registry.ChannelRegistry;
 import com.openclaw.channel.routing.TargetResolver;
+import com.openclaw.channel.telegram.TelegramBot;
+import com.openclaw.channel.telegram.TelegramChannelPlugin;
 import com.openclaw.channel.telegram.TelegramOutboundAdapter;
+import com.openclaw.channel.wechat.WeChatChannelPlugin;
 import com.openclaw.channel.wechat.WeChatOutboundAdapter;
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -100,5 +104,58 @@ public class ChannelBeanConfig {
         }
 
         return service;
+    }
+
+    /**
+     * Initialize channel plugins (Telegram bot polling, WeChat plugin) at startup
+     * and cleanly shut them down when the application stops.
+     */
+    @Bean
+    public ChannelPluginLifecycle channelPluginLifecycle() {
+        OpenClawConfig config;
+        try {
+            config = configService.loadConfig();
+        } catch (Exception e) {
+            log.warn("Failed to load config for channel plugin initialization: {}", e.getMessage());
+            return new ChannelPluginLifecycle(null);
+        }
+
+        // Initialize Telegram
+        TelegramBot.TelegramBotContext telegramContext = null;
+        try {
+            telegramContext = TelegramChannelPlugin.initialize(config);
+            if (telegramContext != null) {
+                TelegramChannelPlugin.start(telegramContext);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to initialize Telegram channel plugin: {}", e.getMessage());
+        }
+
+        // Initialize WeChat
+        try {
+            WeChatChannelPlugin.initialize(config);
+        } catch (Exception e) {
+            log.warn("Failed to initialize WeChat channel plugin: {}", e.getMessage());
+        }
+
+        return new ChannelPluginLifecycle(telegramContext);
+    }
+
+    /**
+     * Manages the lifecycle of channel plugins, ensuring clean shutdown.
+     */
+    public static class ChannelPluginLifecycle implements DisposableBean {
+        private final TelegramBot.TelegramBotContext telegramContext;
+
+        public ChannelPluginLifecycle(TelegramBot.TelegramBotContext telegramContext) {
+            this.telegramContext = telegramContext;
+        }
+
+        @Override
+        public void destroy() {
+            if (telegramContext != null) {
+                TelegramChannelPlugin.stop(telegramContext);
+            }
+        }
     }
 }

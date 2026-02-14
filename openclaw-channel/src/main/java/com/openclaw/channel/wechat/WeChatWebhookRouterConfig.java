@@ -26,8 +26,10 @@ public class WeChatWebhookRouterConfig {
     public RouterFunction<ServerResponse> weChatWebhookRoutes(ConfigService configService) {
         WeChatWebhookController controller = resolveController(configService);
         if (controller == null) {
-            // Return an empty router — no routes registered
-            return RouterFunctions.route().build();
+            // Return a no-op router with a never-matching predicate
+            return RouterFunctions.route()
+                    .GET("/__wechat_disabled__", request -> ServerResponse.notFound().build())
+                    .build();
         }
 
         log.info("WeChat webhook routes registered at /wechat-webhook");
