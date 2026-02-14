@@ -25,6 +25,9 @@ public final class NetUtils {
             return true;
         if ("::1".equals(ip))
             return true;
+        // Java InetAddress.getHostAddress() returns full-form IPv6 for loopback
+        if ("0:0:0:0:0:0:0:1".equals(ip))
+            return true;
         if (ip.startsWith("::ffff:127."))
             return true;
         return false;
