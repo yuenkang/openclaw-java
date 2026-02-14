@@ -125,6 +125,7 @@ public class OpenAICompatibleProvider implements ModelProvider {
             // Mutable state for accumulating the streaming response
             ChatResponse.ChatResponseBuilder responseBuilder = ChatResponse.builder();
             StringBuilder textContent = new StringBuilder();
+            StringBuilder reasoningContent = new StringBuilder();
             // Track tool calls: index → (id, name, arguments_builder)
             Map<Integer, String[]> toolIds = new LinkedHashMap<>();
             Map<Integer, StringBuilder> toolArgs = new LinkedHashMap<>();
@@ -139,6 +140,8 @@ public class OpenAICompatibleProvider implements ModelProvider {
                             responseBuilder.message(ChatMessage.builder()
                                     .role("assistant")
                                     .content(textContent.toString())
+                                    .reasoningContent(
+                                            reasoningContent.length() > 0 ? reasoningContent.toString() : null)
                                     .build());
                             List<ToolUse> toolUses = buildToolUses();
                             if (!toolUses.isEmpty()) {
@@ -172,6 +175,12 @@ public class OpenAICompatibleProvider implements ModelProvider {
                         String finishReason = choice.path("finish_reason").asText(null);
                         if (finishReason != null) {
                             responseBuilder.stopReason(finishReason);
+                        }
+
+                        // Reasoning/thinking content delta (from thinking models)
+                        String reasoning = delta.path("reasoning_content").asText(null);
+                        if (reasoning != null && !reasoning.isEmpty()) {
+                            reasoningContent.append(reasoning);
                         }
 
                         // Text delta
@@ -252,6 +261,7 @@ public class OpenAICompatibleProvider implements ModelProvider {
                         responseBuilder.message(ChatMessage.builder()
                                 .role("assistant")
                                 .content(textContent.toString())
+                                .reasoningContent(reasoningContent.length() > 0 ? reasoningContent.toString() : null)
                                 .build());
                         List<ToolUse> toolUses = buildToolUses();
                         if (!toolUses.isEmpty()) {
@@ -357,8 +367,17 @@ public class OpenAICompatibleProvider implements ModelProvider {
                 m.put("tool_calls", toolCalls);
                 messages.add(m);
             } else {
-                messages.add(Map.of("role", msg.getRole(), "content",
-                        msg.getContent() != null ? msg.getContent() : ""));
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("role", msg.getRole());
+                m.put("content", msg.getContent() != null ? msg.getContent() : "");
+                // NOTE: We intentionally do NOT include reasoning_content here.
+                // When using thinking models via an OpenAI-compatible proxy,
+                // the proxy loses the Anthropic 'signature' during format conversion.
+                // Sending reasoning_content back would cause the proxy to construct
+                // a thinking block without a valid signature, causing Anthropic to
+                // reject with "thinking.signature: Field required".
+                // Anthropic API allows omitting thinking blocks from history.
+                messages.add(m);
             }
         }
         body.put("messages", messages);
@@ -400,9 +419,14 @@ public class OpenAICompatibleProvider implements ModelProvider {
         }
 
         // Message content
+        String reasoningContent = message.has("reasoning_content")
+                && !message.path("reasoning_content").isNull()
+                        ? message.path("reasoning_content").asText(null)
+                        : null;
         builder.message(ChatMessage.builder()
                 .role("assistant")
                 .content(message.path("content").asText(""))
+                .reasoningContent(reasoningContent)
                 .build());
 
         // Tool calls
