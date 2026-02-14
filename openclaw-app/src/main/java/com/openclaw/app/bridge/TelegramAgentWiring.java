@@ -13,6 +13,7 @@ import com.openclaw.common.config.SessionPaths;
 import com.openclaw.gateway.methods.ChatAgentBridge;
 import com.openclaw.gateway.session.SessionPersistence;
 import com.openclaw.gateway.session.TranscriptStore;
+import com.openclaw.gateway.session.UsageTracker;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -91,14 +92,15 @@ public class TelegramAgentWiring {
             OpenClawConfig config) {
 
         // Resolve model alias
-        String resolvedModelId = modelId;
+        String modelIdResolved = modelId;
         if (config.getModelAliases() != null && config.getModelAliases().containsKey(modelId)) {
-            resolvedModelId = config.getModelAliases().get(modelId);
+            modelIdResolved = config.getModelAliases().get(modelId);
         }
-        if ("default".equals(resolvedModelId)) {
-            resolvedModelId = config.getModel() != null ? config.getModel()
+        if ("default".equals(modelIdResolved)) {
+            modelIdResolved = config.getModel() != null ? config.getModel()
                     : "anthropic/claude-sonnet-4-5";
         }
+        final String resolvedModelId = modelIdResolved;
 
         // --- Transcript persistence: derive session ID and load history ---
         String agentId = AgentDirs.DEFAULT_AGENT_ID;
@@ -148,6 +150,22 @@ public class TelegramAgentWiring {
                     } catch (Exception e) {
                         log.error("Failed to save transcript for session {}: {}",
                                 sessionKey, e.getMessage());
+                    }
+
+                    // --- Usage tracking: record token usage ---
+                    if (result.getTotalUsage() != null) {
+                        try {
+                            Path usagePath = UsageTracker.resolveUsagePath(transcriptPath);
+                            UsageTracker.recordUsage(usagePath, sessionKey,
+                                    resolvedModelId,
+                                    result.getTotalUsage().getInputTokens(),
+                                    result.getTotalUsage().getOutputTokens(),
+                                    result.getTotalUsage().getCacheReadTokens(),
+                                    result.getTotalUsage().getCacheWriteTokens());
+                        } catch (Exception e) {
+                            log.error("Failed to record usage for session {}: {}",
+                                    sessionKey, e.getMessage());
+                        }
                     }
 
                     return responseText;
