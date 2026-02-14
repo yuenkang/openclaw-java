@@ -1,5 +1,24 @@
 # Changelog
 
+## Phase 32 — 集成测试修复 + WebSocket 可靠性 (2026-02-15)
+
+### Fixed
+
+- **WebSocket 大消息丢失** — `models.list` 响应 (8414 bytes) 超过 Tomcat WebSocket 默认 `textBufferSize` (8192 bytes)，导致消息被静默丢弃。测试客户端现使用 `ContainerProvider` 设置 256KB 缓冲区
+- **WebSocket 多线程发送安全** — 使用 `ConcurrentWebSocketSessionDecorator` 包装 session，防止异步方法处理器从非 IO 线程发送消息时丢失
+
+### Modified
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `GatewayWebSocketHandler.java` | `ConcurrentWebSocketSessionDecorator` 包装 session (5s send timeout, 512KB buffer) |
+| `GatewayConnection.java` | `sendJson()` 移除手动 `synchronized`，由 Decorator 保证线程安全 |
+| `ModelCatalogImpl.java` | `listModels()` 重写为并行查询所有 provider + 3s 超时 |
+| `OpenAICompatibleProvider.java` | `listModels()` 使用独立 HTTP client (5s connect + 5s read timeout) |
+| `AppEndToEndTest.java` | 设置 WebSocket 客户端 `maxTextMessageBufferSize=256KB`；`rpc()` 方法按 ID 匹配响应并跳过广播事件 |
+
+---
+
 ## Infra 持久层 — 会话管理命令 (2026-02-15)
 
 ### Added

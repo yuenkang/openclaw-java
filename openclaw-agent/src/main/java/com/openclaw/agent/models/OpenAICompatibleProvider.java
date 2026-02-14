@@ -281,6 +281,12 @@ public class OpenAICompatibleProvider implements ModelProvider {
 
     @Override
     public List<ModelInfo> listModels() {
+        // Use a short-timeout client for model listing to avoid blocking
+        // the caller for 30s+ when the API is slow or unreachable.
+        OkHttpClient listClient = httpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .readTimeout(Duration.ofSeconds(5))
+                .build();
         try {
             Request.Builder reqBuilder = new Request.Builder()
                     .url(baseUrl + "/models")
@@ -290,7 +296,7 @@ public class OpenAICompatibleProvider implements ModelProvider {
                 reqBuilder.header("Authorization", "Bearer " + apiKey);
             }
 
-            try (Response response = httpClient.newCall(reqBuilder.build()).execute()) {
+            try (Response response = listClient.newCall(reqBuilder.build()).execute()) {
                 if (response.isSuccessful() && response.body() != null) {
                     JsonNode root = objectMapper.readTree(response.body().string());
                     JsonNode data = root.path("data");
