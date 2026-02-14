@@ -52,6 +52,16 @@ public class TelegramBotMessageDispatch {
 
     private static volatile ReplyPipeline replyPipeline;
     private static volatile AgentInvoker agentInvoker;
+    private static volatile CommandHandler commandHandler;
+
+    /**
+     * Command handler — intercepts slash commands before the reply pipeline.
+     * Returns a reply string if the command was handled, null otherwise.
+     */
+    @FunctionalInterface
+    public interface CommandHandler {
+        String handle(String command, String sessionKey, OpenClawConfig config);
+    }
 
     /** Set the full reply pipeline. Preferred over setAgentInvoker. */
     public static void setReplyPipeline(ReplyPipeline pipeline) {
@@ -61,6 +71,11 @@ public class TelegramBotMessageDispatch {
     /** Legacy: set a simple agent invoker (bypasses getReplyFromConfig). */
     public static void setAgentInvoker(AgentInvoker invoker) {
         agentInvoker = invoker;
+    }
+
+    /** Set the command handler for slash commands (e.g. /clear, /usage). */
+    public static void setCommandHandler(CommandHandler handler) {
+        commandHandler = handler;
     }
 
     // =========================================================================
@@ -182,6 +197,22 @@ public class TelegramBotMessageDispatch {
 
         // Send typing action while processing
         sendTyping(token, chatId);
+
+        // Intercept slash commands before the reply pipeline
+        String text = context.getText() != null ? context.getText().trim() : "";
+        if (commandHandler != null && text.startsWith("/")) {
+            String cmdReply = null;
+            try {
+                cmdReply = commandHandler.handle(text, sessionKey, config);
+            } catch (Exception e) {
+                log.error("Command handler failed: {}", e.getMessage(), e);
+            }
+            if (cmdReply != null) {
+                deliverReply(token, chatId, cmdReply,
+                        messageId, replyToMode, messageThreadId, textLimit);
+                return;
+            }
+        }
 
         // Prefer full ReplyPipeline over legacy AgentInvoker
         if (replyPipeline != null) {

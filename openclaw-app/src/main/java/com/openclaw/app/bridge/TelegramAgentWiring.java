@@ -66,6 +66,9 @@ public class TelegramAgentWiring {
         // 3. Keep legacy AgentInvoker as fallback
         TelegramBotMessageDispatch.setAgentInvoker(this::invokeAgentLegacy);
 
+        // 4. Wire command handler for /clear, /usage, etc.
+        TelegramBotMessageDispatch.setCommandHandler(this::handleCommand);
+
         log.info("Telegram auto-reply pipeline wired successfully");
     }
 
@@ -291,5 +294,106 @@ public class TelegramAgentWiring {
                 "inputTokens", usage.getInputTokens(),
                 "outputTokens", usage.getOutputTokens(),
                 "totalTokens", usage.getInputTokens() + usage.getOutputTokens());
+    }
+
+    // =========================================================================
+    // Command handler — /clear, /usage
+    // =========================================================================
+
+    /**
+     * Handle slash commands. Returns reply text if handled, null to pass through.
+     */
+    private String handleCommand(String command, String sessionKey, OpenClawConfig config) {
+        String cmd = command.trim().toLowerCase();
+        // Strip bot username suffix (e.g. /clear@mybotname)
+        int atIdx = cmd.indexOf('@');
+        if (atIdx > 0) {
+            cmd = cmd.substring(0, atIdx);
+        }
+
+        return switch (cmd) {
+            case "/clear" -> handleClearCommand(sessionKey);
+            case "/usage" -> handleUsageCommand(sessionKey);
+            case "/help" -> handleHelpCommand();
+            default -> null; // Not a known command — pass to LLM
+        };
+    }
+
+    private String handleClearCommand(String sessionKey) {
+        String agentId = AgentDirs.DEFAULT_AGENT_ID;
+        Path storePath = SessionPaths.resolveDefaultSessionStorePath(agentId);
+        var store = SessionPersistence.loadSessionStore(storePath);
+        var existing = store.get(sessionKey);
+
+        if (existing != null) {
+            Path transcriptPath = SessionPaths.resolveSessionTranscriptPath(
+                    existing.sessionId(), agentId);
+            TranscriptStore.clearTranscript(transcriptPath, existing.sessionId());
+
+            // Also clear usage for this session
+            Path usagePath = UsageTracker.resolveUsagePath(transcriptPath);
+            try {
+                if (java.nio.file.Files.exists(usagePath)) {
+                    java.nio.file.Files.delete(usagePath);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to clear usage file: {}", e.getMessage());
+            }
+
+            log.info("Cleared session history: {}", sessionKey);
+            return "✅ 对话历史已清除。新的对话将从头开始。";
+        }
+
+        return "✅ 当前没有对话历史。";
+    }
+
+    private String handleUsageCommand(String sessionKey) {
+        String agentId = AgentDirs.DEFAULT_AGENT_ID;
+        Path storePath = SessionPaths.resolveDefaultSessionStorePath(agentId);
+        var store = SessionPersistence.loadSessionStore(storePath);
+        var existing = store.get(sessionKey);
+
+        if (existing == null) {
+            return "📊 当前尚无用量记录。";
+        }
+
+        Path transcriptPath = SessionPaths.resolveSessionTranscriptPath(
+                existing.sessionId(), agentId);
+        Path usagePath = UsageTracker.resolveUsagePath(transcriptPath);
+        UsageTracker.UsageSummary summary = UsageTracker.summarizeUsage(usagePath);
+
+        if (summary.callCount() == 0) {
+            return "📊 当前尚无用量记录。";
+        }
+
+        int msgCount = TranscriptStore.countMessages(transcriptPath);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("📊 *用量统计*\n\n");
+        sb.append(String.format("💬 对话轮数: %d\n", msgCount / 2));
+        sb.append(String.format("🤖 LLM 调用: %d 次\n", summary.callCount()));
+        sb.append(String.format("📥 输入 tokens: %,d\n", summary.totalInputTokens()));
+        sb.append(String.format("📤 输出 tokens: %,d\n", summary.totalOutputTokens()));
+        if (summary.totalCacheReadTokens() > 0) {
+            sb.append(String.format("♻️ 缓存读取: %,d\n", summary.totalCacheReadTokens()));
+        }
+        sb.append(String.format("📈 总 tokens: %,d\n", summary.totalTokens()));
+        sb.append(String.format("💰 估算成本: $%.4f\n", summary.totalEstimatedCost()));
+        if (summary.lastModel() != null) {
+            sb.append(String.format("🏷️ 模型: %s", summary.lastModel()));
+        }
+
+        return sb.toString();
+    }
+
+    private String handleHelpCommand() {
+        return """
+                🤖 *可用命令*
+
+                /clear - 清除当前对话历史
+                /usage - 查看用量统计
+                /help - 显示此帮助信息
+
+                其他消息将直接与 AI 对话。""";
     }
 }
