@@ -307,9 +307,57 @@ public class OpenClawConfig {
     @Data
     public static class BrowserConfig {
         private Boolean enabled;
+        /** If false, disable browser act:evaluate (arbitrary JS). Default: true */
+        private Boolean evaluateEnabled;
+        /** Base URL of the CDP endpoint (for remote browsers). */
+        private String cdpUrl;
+        /** Remote CDP HTTP timeout (ms). Default: 1500. */
+        private Integer remoteCdpTimeoutMs;
+        /** Remote CDP WebSocket handshake timeout (ms). */
+        private Integer remoteCdpHandshakeTimeoutMs;
+        /** Accent color for the openclaw browser profile (hex). Default: #FF4500 */
+        private String color;
+        /** Override the browser executable path. */
+        private String executablePath;
+        /** Start Chrome headless. Default: false */
+        private Boolean headless;
+        /** Pass --no-sandbox to Chrome (Linux containers). Default: false */
+        private Boolean noSandbox;
+        /** If true: never launch; only attach to existing browser. Default: false */
+        private Boolean attachOnly;
+        /** Default profile when profile param omitted. Default: "chrome" */
+        private String defaultProfile;
+        /** Named browser profiles with explicit CDP ports or URLs. */
+        private Map<String, BrowserProfileConfig> profiles;
+        /** Default snapshot options. */
+        private BrowserSnapshotDefaults snapshotDefaults;
+
+        /** Legacy field (kept for backward compat). */
         private String mode;
+        /** Legacy field. */
         private String profile;
+        /** Legacy field. */
         private Integer cdpPort;
+        /** Control server port (derived from gateway port). */
+        private Integer controlPort;
+    }
+
+    @Data
+    public static class BrowserProfileConfig {
+        /** CDP port for this profile. */
+        private Integer cdpPort;
+        /** CDP URL for this profile (remote Chrome). */
+        private String cdpUrl;
+        /** Profile driver: "openclaw" | "extension". */
+        private String driver;
+        /** Profile color (hex). */
+        private String color;
+    }
+
+    @Data
+    public static class BrowserSnapshotDefaults {
+        /** Default snapshot mode: "efficient" */
+        private String mode;
     }
 
     // ===== types.models.ts =====

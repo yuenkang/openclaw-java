@@ -12,6 +12,7 @@ import okhttp3.sse.EventSources;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.*;
+import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -375,7 +376,46 @@ public class OpenAICompatibleProvider implements ModelProvider {
             } else {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("role", msg.getRole());
-                m.put("content", msg.getContent() != null ? msg.getContent() : "");
+                // Support multimodal content (text + images)
+                if (msg.getContentParts() != null && !msg.getContentParts().isEmpty()) {
+                    List<Map<String, Object>> parts = new ArrayList<>();
+                    for (ContentPart part : msg.getContentParts()) {
+                        if ("text".equals(part.getType())) {
+                            parts.add(Map.of("type", "text", "text",
+                                    part.getText() != null ? part.getText() : ""));
+                        } else if ("image_url".equals(part.getType()) && part.getImageUrl() != null) {
+                            String imageUrl = part.getImageUrl().getUrl();
+                            if (imageUrl != null && imageUrl.startsWith("data:")) {
+                                // data URI: ensure clean base64 (re-encode to strip whitespace/padding issues)
+                                // Format: data:<mime>;base64,<data>
+                                int commaIdx = imageUrl.indexOf(',');
+                                if (commaIdx > 0) {
+                                    String prefix = imageUrl.substring(0, commaIdx + 1);
+                                    String rawBase64 = imageUrl.substring(commaIdx + 1)
+                                            .replaceAll("\\s+", "");
+                                    // Re-encode to guarantee valid base64
+                                    try {
+                                        byte[] decoded = Base64.getDecoder().decode(rawBase64);
+                                        rawBase64 = Base64.getEncoder().encodeToString(decoded);
+                                    } catch (IllegalArgumentException ignored) {
+                                        // If decode fails, use stripped version as-is
+                                    }
+                                    parts.add(Map.of("type", "image_url",
+                                            "image_url", Map.of("url", prefix + rawBase64)));
+                                } else {
+                                    parts.add(Map.of("type", "image_url",
+                                            "image_url", Map.of("url", imageUrl)));
+                                }
+                            } else {
+                                parts.add(Map.of("type", "image_url",
+                                        "image_url", Map.of("url", imageUrl)));
+                            }
+                        }
+                    }
+                    m.put("content", parts);
+                } else {
+                    m.put("content", msg.getContent() != null ? msg.getContent() : "");
+                }
                 // NOTE: We intentionally do NOT include reasoning_content here.
                 // When using thinking models via an OpenAI-compatible proxy,
                 // the proxy loses the Anthropic 'signature' during format conversion.

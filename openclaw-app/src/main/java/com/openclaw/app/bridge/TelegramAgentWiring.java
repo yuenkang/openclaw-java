@@ -5,7 +5,11 @@ import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.runtime.AgentRunner;
 import com.openclaw.agent.tools.ToolRegistry;
+import com.openclaw.agent.tools.builtin.TelegramImageTool;
 import com.openclaw.channel.telegram.TelegramBotMessageDispatch;
+import com.openclaw.channel.telegram.TelegramDownload;
+import com.openclaw.channel.telegram.TelegramSend;
+import com.openclaw.channel.telegram.TelegramToken;
 import com.openclaw.common.config.AgentDirs;
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
@@ -18,8 +22,11 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,6 +48,7 @@ public class TelegramAgentWiring {
 
     private final ChatAgentBridge chatAgentBridge;
     private final AgentRunner agentRunner;
+    private final ToolRegistry toolRegistry;
     private final ConfigService configService;
 
     public TelegramAgentWiring(
@@ -50,6 +58,7 @@ public class TelegramAgentWiring {
             ConfigService configService) {
         this.chatAgentBridge = chatAgentBridge;
         this.agentRunner = new AgentRunner(modelProviderRegistry, toolRegistry);
+        this.toolRegistry = toolRegistry;
         this.configService = configService;
     }
 
@@ -69,7 +78,39 @@ public class TelegramAgentWiring {
         // 4. Wire command handler for /clear, /usage, etc.
         TelegramBotMessageDispatch.setCommandHandler(this::handleCommand);
 
+        // 5. Wire send_image tool — resolve bot token and inject image sender
+        wireTelegramImageSender();
+
         log.info("Telegram auto-reply pipeline wired successfully");
+    }
+
+    /**
+     * Resolve the Telegram bot token and wire TelegramImageTool.ImageSender.
+     */
+    @SuppressWarnings("unchecked")
+    private void wireTelegramImageSender() {
+        try {
+            OpenClawConfig config = configService.loadConfig();
+            Map<String, Object> channels = config.getChannels() != null
+                    ? config.getChannels().getProviders()
+                    : null;
+            TelegramToken.Resolution tokenRes = TelegramToken.resolve(channels, "default");
+
+            if (tokenRes.token() != null && !tokenRes.token().isBlank()) {
+                final String botToken = tokenRes.token();
+                TelegramImageTool.setImageSender((chatId, imageBytes, fileName, caption) -> {
+                    TelegramSend.sendPhoto(botToken, chatId, imageBytes, fileName,
+                            caption, null, null);
+                });
+                // Register the tool into the shared ToolRegistry
+                toolRegistry.register(new TelegramImageTool());
+                log.info("TelegramImageTool wired (token source: {})", tokenRes.source());
+            } else {
+                log.warn("No Telegram bot token found — send_image tool will be unavailable");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to wire TelegramImageTool: {}", e.getMessage());
+        }
     }
 
     // =========================================================================
@@ -92,7 +133,8 @@ public class TelegramAgentWiring {
             String userMessage,
             String systemPrompt,
             String modelId,
-            OpenClawConfig config) {
+            OpenClawConfig config,
+            Map<String, String> mediaInfo) {
 
         // Resolve model alias
         String modelIdResolved = modelId;
@@ -114,16 +156,30 @@ public class TelegramAgentWiring {
         List<ModelProvider.ChatMessage> historyMessages = loadTranscriptHistory(transcriptPath);
         log.debug("Loaded {} history messages for session {}", historyMessages.size(), sessionKey);
 
-        AgentRunner.AgentRunContext context = AgentRunner.AgentRunContext.builder()
+        // --- Build image content parts if media is attached ---
+        List<ModelProvider.ContentPart> imageContentParts = null;
+        if (mediaInfo != null && mediaInfo.get("mediaType") != null
+                && mediaInfo.get("mediaType").startsWith("image/")) {
+            imageContentParts = buildImageContentParts(
+                    userMessage, mediaInfo.get("mediaFileId"),
+                    mediaInfo.get("mediaType"), mediaInfo.get("botToken"));
+        }
+
+        AgentRunner.AgentRunContext.AgentRunContextBuilder ctxBuilder = AgentRunner.AgentRunContext.builder()
                 .sessionKey(sessionKey)
                 .modelId(resolvedModelId)
-                .userMessage(userMessage)
+                .userMessage(userMessage != null && !userMessage.isBlank() ? userMessage : "请描述这张图片")
                 .systemPrompt(systemPrompt)
                 .messages(historyMessages)
                 .maxTokens(4096)
                 .temperature(0.7)
-                .config(config)
-                .build();
+                .config(config);
+
+        if (imageContentParts != null) {
+            ctxBuilder.imageContentParts(imageContentParts);
+        }
+
+        AgentRunner.AgentRunContext context = ctxBuilder.build();
 
         final long requestTimestamp = System.currentTimeMillis();
 
@@ -395,5 +451,103 @@ public class TelegramAgentWiring {
                 /help - 显示此帮助信息
 
                 其他消息将直接与 AI 对话。""";
+    }
+
+    // =========================================================================
+    // Image content part builder
+    // =========================================================================
+
+    /**
+     * Download an image from Telegram and build multimodal ContentParts.
+     * Returns a list containing a text part (user message) and an image_url part
+     * (base64).
+     */
+    private List<ModelProvider.ContentPart> buildImageContentParts(
+            String userMessage, String fileId, String contentType, String botToken) {
+        if (botToken == null || fileId == null) {
+            log.warn("Cannot download image: missing botToken or fileId");
+            return null;
+        }
+
+        try {
+            // 1. Get file info from Telegram
+            TelegramDownload.TelegramFileInfo fileInfo = TelegramDownload.getTelegramFile(botToken, fileId);
+            if (fileInfo == null) {
+                log.warn("Failed to get file info for fileId: {}", fileId);
+                return null;
+            }
+
+            // 2. Download the file (max 10MB for images)
+            TelegramDownload.SavedMedia savedMedia = TelegramDownload.downloadTelegramFile(botToken, fileInfo,
+                    10_000_000L, null);
+
+            // 3. Read file and encode to base64
+            byte[] imageBytes = Files.readAllBytes(Path.of(savedMedia.getPath()));
+            String base64Data = Base64.getEncoder().encodeToString(imageBytes);
+            // Determine MIME type: prefer Telegram API's contentType (from
+            // extractMediaRef),
+            // then HTTP download header, then file extension detection
+            String mediaType = contentType; // from Telegram API — most accurate
+            if (mediaType == null || !mediaType.startsWith("image/")) {
+                mediaType = savedMedia.getContentType(); // HTTP Content-Type header
+            }
+            if (mediaType == null || !mediaType.startsWith("image/")) {
+                mediaType = detectImageMimeType(savedMedia.getPath()); // file extension
+            }
+
+            String dataUri = "data:" + mediaType + ";base64," + base64Data;
+
+            log.info("Downloaded image: {} bytes, type={}", imageBytes.length, mediaType);
+
+            // 4. Build content parts
+            List<ModelProvider.ContentPart> parts = new ArrayList<>();
+
+            // Image part first
+            parts.add(ModelProvider.ContentPart.builder()
+                    .type("image_url")
+                    .imageUrl(ModelProvider.ImageUrl.builder().url(dataUri).build())
+                    .build());
+
+            // Text part (caption or default prompt)
+            String text = (userMessage != null && !userMessage.isBlank())
+                    ? userMessage
+                    : "请描述这张图片";
+            parts.add(ModelProvider.ContentPart.builder()
+                    .type("text")
+                    .text(text)
+                    .build());
+
+            // 5. Clean up downloaded file
+            try {
+                Files.deleteIfExists(Path.of(savedMedia.getPath()));
+            } catch (IOException ignored) {
+                // Non-critical cleanup failure
+            }
+
+            return parts;
+
+        } catch (Exception e) {
+            log.error("Failed to build image content parts: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Detect image MIME type from file path extension.
+     * Falls back to image/jpeg (the most common Telegram photo format).
+     */
+    private static String detectImageMimeType(String filePath) {
+        if (filePath != null) {
+            String lower = filePath.toLowerCase();
+            if (lower.endsWith(".png"))
+                return "image/png";
+            if (lower.endsWith(".gif"))
+                return "image/gif";
+            if (lower.endsWith(".webp"))
+                return "image/webp";
+            if (lower.endsWith(".jpg") || lower.endsWith(".jpeg"))
+                return "image/jpeg";
+        }
+        return "image/jpeg"; // Telegram photos are typically JPEG
     }
 }

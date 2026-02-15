@@ -1,5 +1,46 @@
 # Changelog
 
+## Phase 33 — 浏览器控制模块 Stage 1-3 (2026-02-15)
+
+### Added
+- `BrowserTypes.java` — 15 个浏览器 DTO 类型（BrowserStatus, BrowserTab, SnapshotResult 等）
+- `BrowserClient.java` — OkHttp HTTP 客户端调用浏览器控制服务器（16 个 API 方法）
+- `BrowserTool.java` — Agent tool 实现，支持 15 种 action（status/start/stop/tabs/snapshot/act 等）
+- `BrowserProfileConfig` / `BrowserSnapshotDefaults` 配置类型
+
+### Changed
+- `OpenClawConfig.BrowserConfig` 从 4 字段扩展到完整配置（13+ 新字段）
+- `OpenClawToolFactory` 注册 `BrowserTool`
+
+## Telegram 图片处理 + ImageTool 增强 (2026-02-15)
+
+### Added
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramImageTool.java` | Agent 工具：通过 Telegram Bot API 向聊天发送图片（支持 filePath/base64/url） |
+
+### Changed
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `ImageTool.java` | 增加 magic bytes MIME 检测（JPEG/PNG/GIF/WebP/BMP），防止 LLM 篡改 data URI 中的 MIME 类型；改进工具描述引导 LLM 优先使用 imagePath |
+| `TelegramSend.java` | `sendPhoto` 支持 Markdown 格式 caption，解析失败自动 fallback 纯文本 |
+| `TelegramAgentWiring.java` | `buildImageContentParts` MIME 优先级修正（Telegram API → HTTP header → 文件扩展名）；动态注册 `TelegramImageTool` |
+| `OpenAICompatibleProvider.java` | data URI 中 base64 数据清洗（decode→re-encode），修复 Google Gemini API 解码失败 |
+| `OpenClawToolFactory.java` | 移除 `TelegramImageTool` 静态注册（改为动态注册） |
+| `TelegramBotMessageDispatch.java` | 新增 bot token 传递到 media info |
+| `GetReply.java` | 提取 media info 传递给 ChatRunner |
+
+### Fixed
+
+- **LLM 图片 MIME 类型错误** — LLM 调用 image 工具时会篡改 base64 数据和 MIME 类型，通过 magic bytes 检测真实格式纠正
+- **Telegram 图片 MIME 类型** — 下载文件的 HTTP Content-Type（如 `application/octet-stream` 或 `image/png`）不可靠，优先使用 Telegram API 提供的准确类型
+- **Google Gemini base64 解码失败** — data URI 中 base64 数据可能含空白字符，通过 decode→re-encode 保证数据干净
+- **`sendPhoto` Markdown 解析错误** — caption 含无效 Markdown 时 Telegram API 报错，增加 fallback 机制
+
+---
+
 ## Phase 32 — 集成测试修复 + WebSocket 可靠性 (2026-02-15)
 
 ### Fixed

@@ -106,15 +106,26 @@ public class AgentRunner {
      */
     public AgentResult run(AgentRunContext context) {
         try {
-            // If userMessage is set but not yet in messages, prepend it
-            if (context.getUserMessage() != null && !context.getUserMessage().isBlank()) {
+            // If userMessage is set or imageContentParts are present, prepend as user
+            // message
+            boolean hasText = context.getUserMessage() != null && !context.getUserMessage().isBlank();
+            boolean hasImage = context.getImageContentParts() != null && !context.getImageContentParts().isEmpty();
+            if (hasText || hasImage) {
                 if (context.getMessages() == null) {
                     context.setMessages(new ArrayList<>());
                 }
-                context.getMessages().add(ModelProvider.ChatMessage.builder()
-                        .role("user")
-                        .content(context.getUserMessage())
-                        .build());
+                // Support multimodal messages (text + images)
+                if (hasImage) {
+                    context.getMessages().add(ModelProvider.ChatMessage.builder()
+                            .role("user")
+                            .contentParts(context.getImageContentParts())
+                            .build());
+                } else {
+                    context.getMessages().add(ModelProvider.ChatMessage.builder()
+                            .role("user")
+                            .content(context.getUserMessage())
+                            .build());
+                }
             }
             return executeLoop(context);
         } catch (Exception e) {
@@ -426,6 +437,8 @@ public class AgentRunner {
         private String systemPrompt;
         /** User message to prepend to messages list on run start. */
         private String userMessage;
+        /** Multimodal content parts for user message (text + images). */
+        private List<ModelProvider.ContentPart> imageContentParts;
         private List<ModelProvider.ChatMessage> messages;
         private String cwd;
         private int maxTokens;

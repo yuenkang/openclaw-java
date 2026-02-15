@@ -4,12 +4,12 @@ import com.openclaw.agent.models.AnthropicProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.models.OpenAICompatibleProvider;
 import com.openclaw.agent.runtime.AgentRunner;
+import com.openclaw.agent.tools.OpenClawToolFactory;
 import com.openclaw.agent.tools.ToolRegistry;
 import com.openclaw.agent.tools.builtin.ExecTool;
 import com.openclaw.agent.tools.builtin.FileTools;
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,17 +28,31 @@ public class AgentBeanConfig {
     }
 
     @Bean
-    public ToolRegistry toolRegistry() {
+    public ToolRegistry toolRegistry(ModelProviderRegistry modelProviderRegistry) {
         ToolRegistry registry = new ToolRegistry();
 
-        // Register built-in tools
+        // Register built-in coding tools
         registry.register(new ExecTool());
         registry.register(FileTools.readFile());
         registry.register(FileTools.writeFile());
         registry.register(FileTools.listDir());
         registry.register(FileTools.grepSearch());
 
-        log.info("Registered {} built-in tools", registry.size());
+        // Register OpenClaw extension tools (browser, web, memory, message, etc.)
+        try {
+            OpenClawConfig config = configService.loadConfig();
+            var extensionTools = OpenClawToolFactory.createTools(
+                    OpenClawToolFactory.OpenClawToolOptions.builder()
+                            .config(config)
+                            .modelProviderRegistry(modelProviderRegistry)
+                            .build());
+            registry.registerAll(extensionTools);
+            log.info("Registered {} extension tools", extensionTools.size());
+        } catch (Exception e) {
+            log.warn("Failed to register extension tools: {}", e.getMessage());
+        }
+
+        log.info("Registered {} total tools", registry.size());
         return registry;
     }
 
