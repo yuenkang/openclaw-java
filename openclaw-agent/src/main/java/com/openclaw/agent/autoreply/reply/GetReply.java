@@ -42,6 +42,8 @@ public final class GetReply {
          * @param modelId      resolved model identifier (e.g.
          *                     "anthropic/claude-sonnet-4-5")
          * @param config       current OpenClawConfig
+         * @param mediaInfo    media attachment info (nullable). Keys: "mediaType",
+         *                     "mediaFileId"
          * @return CompletableFuture with the agent's reply text
          */
         CompletableFuture<String> run(
@@ -49,7 +51,8 @@ public final class GetReply {
                 String userMessage,
                 String systemPrompt,
                 String modelId,
-                OpenClawConfig config);
+                OpenClawConfig config,
+                Map<String, String> mediaInfo);
     }
 
     private static volatile ChatRunner chatRunner;
@@ -135,9 +138,14 @@ public final class GetReply {
                     // 5. Resolve body for agent
                     String body = resolveBody(sessionCtx, ctx, resetTriggered);
 
-                    if (body == null || body.trim().isEmpty()) {
-                        log.debug("Empty body after resolution, skipping");
+                    // Allow image-only messages (empty body with media) to pass through
+                    boolean hasMedia = ctx.get("MediaType") instanceof String;
+                    if ((body == null || body.trim().isEmpty()) && !hasMedia) {
+                        log.debug("Empty body after resolution and no media, skipping");
                         return CompletableFuture.completedFuture(List.<Map<String, Object>>of());
+                    }
+                    if (body == null || body.trim().isEmpty()) {
+                        body = ""; // Keep empty body; TelegramAgentWiring will set a default
                     }
 
                     // 6. Build system prompt
@@ -146,8 +154,21 @@ public final class GetReply {
                     log.info("Running auto-reply: session={} model={} bodyLen={} isNew={}",
                             resolvedSessionKey, modelId, body.length(), isNewSession);
 
-                    // 7. Invoke agent via ChatRunner
-                    return chatRunner.run(resolvedSessionKey, body, systemPrompt, modelId, cfg)
+                    // 7. Extract media info from context
+                    Map<String, String> mediaInfo = null;
+                    if (ctx.get("MediaType") instanceof String mediaType
+                            && ctx.get("MediaPath") instanceof String mediaPath) {
+                        Map<String, String> mi = new LinkedHashMap<>();
+                        mi.put("mediaType", mediaType);
+                        mi.put("mediaFileId", mediaPath);
+                        if (ctx.get("BotToken") instanceof String botToken) {
+                            mi.put("botToken", botToken);
+                        }
+                        mediaInfo = mi;
+                    }
+
+                    // 8. Invoke agent via ChatRunner
+                    return chatRunner.run(resolvedSessionKey, body, systemPrompt, modelId, cfg, mediaInfo)
                             .thenApply(reply -> {
                                 if (reply == null || reply.isBlank()) {
                                     return List.<Map<String, Object>>of();

@@ -3,8 +3,12 @@ package com.openclaw.channel.telegram;
 import com.openclaw.common.config.OpenClawConfig;
 import lombok.extern.slf4j.Slf4j;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Telegram message dispatch: builds a MsgContext from the Telegram message,
@@ -247,6 +251,8 @@ public class TelegramBotMessageDispatch {
             int textLimit) {
 
         Map<String, Object> msgCtx = buildMsgContext(context, accountId);
+        // Include bot token for media downloads (e.g. image messages)
+        msgCtx.put("BotToken", token);
 
         // Reply options
         Map<String, Object> opts = new LinkedHashMap<>();
@@ -324,8 +330,20 @@ public class TelegramBotMessageDispatch {
         }
     }
 
+    // Regex to match markdown images with base64 data URIs:
+    // ![caption](data:image/png;base64,...)
+    private static final Pattern BASE64_IMAGE_PATTERN = Pattern.compile(
+            "!\\[([^\\]]*)\\]\\(data:image/([a-zA-Z]+);base64,([A-Za-z0-9+/=\\s]+)\\)");
+
+    // Regex to match markdown images with local file paths:
+    // ![caption](/path/to/image.png)
+    private static final Pattern FILE_IMAGE_PATTERN = Pattern.compile(
+            "!\\[([^\\]]*)\\]\\((/[^)]+\\.(png|jpg|jpeg|gif|webp))\\)");
+
     /**
      * Deliver a reply back to Telegram.
+     * Automatically detects embedded images (base64 data URIs or local file paths)
+     * and sends them as Telegram photos.
      */
     public static void deliverReply(
             String token,
@@ -340,15 +358,81 @@ public class TelegramBotMessageDispatch {
             text = EMPTY_RESPONSE_FALLBACK;
         }
 
-        // Truncate if needed
-        if (text.length() > textLimit) {
-            text = text.substring(0, textLimit - 3) + "...";
+        // Extract and send embedded images
+        String remaining = extractAndSendImages(token, chatId, text,
+                replyToMessageId, messageThreadId);
+
+        // Send remaining text (if any)
+        remaining = remaining.trim();
+        if (!remaining.isBlank()) {
+            // Truncate if needed
+            if (remaining.length() > textLimit) {
+                remaining = remaining.substring(0, textLimit - 3) + "...";
+            }
+
+            log.debug("Delivering reply: chatId={} len={} replyTo={}",
+                    chatId, remaining.length(), replyToMessageId);
+
+            TelegramSend.sendMessage(token, chatId, remaining, replyToMessageId,
+                    messageThreadId, replyToMode);
         }
+    }
 
-        log.debug("Delivering reply: chatId={} len={} replyTo={}",
-                chatId, text.length(), replyToMessageId);
+    /**
+     * Extract embedded images from text, send them as Telegram photos,
+     * and return the text with images removed.
+     */
+    private static String extractAndSendImages(
+            String token, String chatId, String text,
+            String replyToMessageId, Integer messageThreadId) {
 
-        TelegramSend.sendMessage(token, chatId, text, replyToMessageId,
-                messageThreadId, replyToMode);
+        String remaining = text;
+        int imageCount = 0;
+
+        // 1. Handle base64 data URI images
+        Matcher base64Matcher = BASE64_IMAGE_PATTERN.matcher(remaining);
+        while (base64Matcher.find()) {
+            String caption = base64Matcher.group(1);
+            String format = base64Matcher.group(2);
+            String base64Data = base64Matcher.group(3).replaceAll("\\s+", "");
+
+            try {
+                byte[] imageBytes = Base64.getDecoder().decode(base64Data);
+                String fileName = "image_" + (++imageCount) + "." + format;
+
+                log.info("Sending embedded base64 image: {} ({} bytes)", fileName, imageBytes.length);
+                TelegramSend.sendPhoto(token, chatId, imageBytes, fileName,
+                        caption.isBlank() ? null : caption, replyToMessageId, messageThreadId);
+            } catch (Exception e) {
+                log.warn("Failed to decode/send base64 image: {}", e.getMessage());
+            }
+        }
+        remaining = BASE64_IMAGE_PATTERN.matcher(remaining).replaceAll("");
+
+        // 2. Handle local file path images
+        Matcher fileMatcher = FILE_IMAGE_PATTERN.matcher(remaining);
+        while (fileMatcher.find()) {
+            String caption = fileMatcher.group(1);
+            String filePath = fileMatcher.group(2);
+
+            try {
+                Path path = Path.of(filePath);
+                if (Files.exists(path) && Files.isRegularFile(path)) {
+                    byte[] imageBytes = Files.readAllBytes(path);
+                    String fileName = path.getFileName().toString();
+
+                    log.info("Sending local file image: {} ({} bytes)", fileName, imageBytes.length);
+                    TelegramSend.sendPhoto(token, chatId, imageBytes, fileName,
+                            caption.isBlank() ? null : caption, replyToMessageId, messageThreadId);
+                } else {
+                    log.debug("Image file not found: {}", filePath);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to read/send file image {}: {}", filePath, e.getMessage());
+            }
+        }
+        remaining = FILE_IMAGE_PATTERN.matcher(remaining).replaceAll("");
+
+        return remaining;
     }
 }

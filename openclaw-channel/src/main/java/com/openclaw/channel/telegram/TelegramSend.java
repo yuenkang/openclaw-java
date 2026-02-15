@@ -185,6 +185,59 @@ public final class TelegramSend {
         return TelegramFetch.callApi(token, "editMessageText", json.toString());
     }
 
+    /**
+     * Send a photo to a Telegram chat.
+     *
+     * @param token            Bot token
+     * @param chatId           Target chat ID
+     * @param imageBytes       Image file bytes
+     * @param fileName         Filename (e.g. "screenshot.png")
+     * @param caption          Optional caption text
+     * @param replyToMessageId Optional message ID to reply to
+     * @param messageThreadId  Optional thread ID for topics
+     */
+    public static String sendPhoto(String token, String chatId, byte[] imageBytes,
+            String fileName, String caption,
+            String replyToMessageId, Integer messageThreadId) {
+
+        var fields = new java.util.LinkedHashMap<String, String>();
+        fields.put("chat_id", chatId);
+        if (caption != null && !caption.isBlank()) {
+            fields.put("caption", caption);
+            fields.put("parse_mode", "Markdown");
+        }
+        if (replyToMessageId != null && !replyToMessageId.isBlank()) {
+            fields.put("reply_to_message_id", replyToMessageId);
+        }
+        if (messageThreadId != null) {
+            fields.put("message_thread_id", String.valueOf(messageThreadId));
+        }
+
+        // Determine MIME type from filename
+        String mimeType = "image/png";
+        if (fileName != null) {
+            if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                mimeType = "image/jpeg";
+            } else if (fileName.endsWith(".gif")) {
+                mimeType = "image/gif";
+            } else if (fileName.endsWith(".webp")) {
+                mimeType = "image/webp";
+            }
+        }
+
+        String result = TelegramFetch.callApiMultipart(token, "sendPhoto",
+                fields, "photo", imageBytes, fileName != null ? fileName : "image.png", mimeType);
+
+        // Fallback: if Markdown parse failed, retry without parse_mode
+        if (result != null && isParseError(result) && fields.containsKey("parse_mode")) {
+            fields.remove("parse_mode");
+            result = TelegramFetch.callApiMultipart(token, "sendPhoto",
+                    fields, "photo", imageBytes, fileName != null ? fileName : "image.png", mimeType);
+        }
+
+        return result;
+    }
+
     private static String escapeJson(String value) {
         if (value == null)
             return "";

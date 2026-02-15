@@ -1,6 +1,8 @@
 package com.openclaw.agent.tools;
 
+import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.tools.builtin.*;
+import com.openclaw.agent.tools.builtin.browser.BrowserTool;
 import com.openclaw.common.config.OpenClawConfig;
 import lombok.Builder;
 import lombok.Data;
@@ -21,88 +23,93 @@ import java.util.*;
 @Slf4j
 public class OpenClawToolFactory {
 
-    @Data
-    @Builder
-    public static class OpenClawToolOptions {
-        /** Current session key */
-        private String sessionKey;
-        /** Working directory */
-        private String workspaceDir;
-        /** Agent directory */
-        private String agentDir;
-        /** Agent account ID */
-        private String agentAccountId;
-        /** Whether running in sandbox */
-        private boolean sandboxed;
-        /** Sandbox root directory */
-        private String sandboxRoot;
-        /** Configuration */
-        private OpenClawConfig config;
-        /** Current channel id (for message tool context) */
-        private String currentChannelId;
-        /** Current channel provider (e.g. discord, telegram) */
-        private String currentChannelProvider;
-    }
+        @Data
+        @Builder
+        public static class OpenClawToolOptions {
+                /** Current session key */
+                private String sessionKey;
+                /** Working directory */
+                private String workspaceDir;
+                /** Agent directory */
+                private String agentDir;
+                /** Agent account ID */
+                private String agentAccountId;
+                /** Whether running in sandbox */
+                private boolean sandboxed;
+                /** Sandbox root directory */
+                private String sandboxRoot;
+                /** Configuration */
+                private OpenClawConfig config;
+                /** Current channel id (for message tool context) */
+                private String currentChannelId;
+                /** Current channel provider (e.g. discord, telegram) */
+                private String currentChannelProvider;
+                /** Model provider registry for tools that need LLM access (e.g. ImageTool) */
+                private ModelProviderRegistry modelProviderRegistry;
+        }
 
-    /**
-     * Create all OpenClaw extension tools.
-     */
-    public static List<AgentTool> createTools(OpenClawToolOptions options) {
-        List<AgentTool> tools = new ArrayList<>();
+        /**
+         * Create all OpenClaw extension tools.
+         */
+        public static List<AgentTool> createTools(OpenClawToolOptions options) {
+                List<AgentTool> tools = new ArrayList<>();
 
-        // --- Session Status ---
-        tools.add(SessionStatusTool.create(
-                options.getSessionKey(),
-                options.getConfig()));
+                // --- Session Status ---
+                tools.add(SessionStatusTool.create(
+                                options.getSessionKey(),
+                                options.getConfig()));
 
-        // --- Gateway ---
-        tools.add(GatewayTool.create(
-                options.getSessionKey(),
-                options.getConfig()));
+                // --- Gateway ---
+                tools.add(GatewayTool.create(
+                                options.getSessionKey(),
+                                options.getConfig()));
 
-        // --- Message ---
-        tools.add(new MessageTool(
-                options.getCurrentChannelId(),
-                options.getCurrentChannelProvider(),
-                false));
+                // --- Message ---
+                tools.add(new MessageTool(
+                                options.getCurrentChannelId(),
+                                options.getCurrentChannelProvider(),
+                                false));
 
-        // --- Memory ---
-        tools.add(new MemoryTool());
+                // --- Memory ---
+                tools.add(new MemoryTool());
 
-        // --- Web Fetch ---
-        tools.add(new WebFetchTool());
+                // --- Web Fetch ---
+                tools.add(new WebFetchTool());
 
-        // --- Image ---
-        tools.add(new ImageTool());
+                // --- Image ---
+                tools.add(new ImageTool(options.getModelProviderRegistry()));
 
-        // --- Cron ---
-        tools.add(new CronTool());
+                // --- Cron ---
+                tools.add(new CronTool());
 
-        // --- Agents List ---
-        tools.add(new AgentsListTool());
+                // --- Agents List ---
+                tools.add(new AgentsListTool());
 
-        // --- Nodes ---
-        tools.add(new NodesTool());
+                // --- Nodes ---
+                tools.add(new NodesTool());
 
-        // --- Canvas ---
-        tools.add(new CanvasTool());
+                // --- Browser ---
+                tools.add(new BrowserTool(options.getConfig()));
 
-        // --- TTS ---
-        tools.add(new TtsTool());
+                // --- Canvas ---
+                tools.add(new CanvasTool());
 
-        // --- Session Management ---
-        tools.add(new SessionsListTool());
-        tools.add(new SessionsHistoryTool());
-        tools.add(new SessionsSendTool(
-                options.getSessionKey(),
-                options.getCurrentChannelProvider(),
-                options.isSandboxed()));
-        tools.add(new SessionsSpawnTool(
-                options.getSessionKey(),
-                options.getCurrentChannelProvider(),
-                options.isSandboxed()));
+                // --- TTS ---
+                tools.add(new TtsTool());
 
-        log.debug("Created {} OpenClaw extension tools", tools.size());
-        return tools;
-    }
+                // --- Session Management ---
+                tools.add(new SessionsListTool());
+                tools.add(new SessionsHistoryTool());
+                tools.add(new SessionsSendTool(
+                                options.getSessionKey(),
+                                options.getCurrentChannelProvider(),
+                                options.isSandboxed()));
+                tools.add(new SessionsSpawnTool(
+                                options.getSessionKey(),
+                                options.getCurrentChannelProvider(),
+                                options.isSandboxed()));
+
+                log.debug("Created {} OpenClaw extension tools", tools.size());
+                return tools;
+        }
 }

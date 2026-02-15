@@ -117,6 +117,11 @@ public interface ModelProvider {
         private String role;
         private String content;
         /**
+         * Multimodal content parts (text + images). When non-null and non-empty,
+         * takes precedence over the plain {@code content} string for serialization.
+         */
+        private List<ContentPart> contentParts;
+        /**
          * Reasoning/thinking content from thinking models (e.g. Claude with extended
          * thinking).
          */
@@ -124,6 +129,35 @@ public interface ModelProvider {
         private String toolUseId;
         /** Tool uses included in assistant messages (for multi-turn tool calling) */
         private List<ToolUse> toolUses;
+    }
+
+    /**
+     * A single content part in a multimodal message.
+     * Supports "text" and "image_url" types (OpenAI Vision API format).
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class ContentPart {
+        /** "text" or "image_url" */
+        private String type;
+        /** Text content (used when type="text") */
+        private String text;
+        /** Image URL reference (used when type="image_url") */
+        private ImageUrl imageUrl;
+    }
+
+    /**
+     * Image URL reference for multimodal content.
+     * Supports both HTTP URLs and data URIs (e.g. "data:image/jpeg;base64,...").
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class ImageUrl {
+        private String url;
     }
 
     @Data
