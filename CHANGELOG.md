@@ -1,5 +1,48 @@
 # Changelog
 
+## Phase 34 — infra/ 核心基础设施模块 (2026-02-15)
+
+### Added
+
+**openclaw-common — `com.openclaw.common.infra` (16 files)**
+
+| Java 文件 | TS 来源 | 功能 |
+|---|---|---|
+| `Backoff.java` | `backoff.ts` | 指数退避计算 + 可中断 sleep |
+| `RetryRunner.java` | `retry.ts` | 通用重试执行器（可配置次数/延迟/抖动） |
+| `RetryPolicy.java` | `retry-policy.ts` | Discord/Telegram 平台重试策略工厂 |
+| `AgentEvents.java` | `agent-events.ts` | Agent 事件总线（运行级序列号 + 监听器） |
+| `SystemEvents.java` | `system-events.ts` | 会话级临时事件队列（去重 + 上限） |
+| `DiagnosticEvents.java` | `diagnostic-events.ts` | 诊断遥测事件总线 |
+| `DiagnosticFlags.java` | `diagnostic-flags.ts` | 诊断标志解析（config + 环境变量, glob 匹配） |
+| `HeartbeatEvents.java` | `heartbeat-events.ts` | 心跳状态事件 + Builder |
+| `RuntimeGuard.java` | `runtime-guard.ts` | JVM 版本检测与验证 (≥17) |
+| `ExecSafety.java` | `exec-safety.ts` | 命令注入防护（shell 元字符/控制字符检测） |
+| `FsSafe.java` | `fs-safe.ts` | 安全文件读取（防路径遍历 + 符号链接逃逸） |
+| `FormatDuration.java` | `format-duration.ts` | 持续时间格式化 (ms → "2.5s") |
+| `EnvUtils.java` | `env.ts` | 环境变量工具（日志/布尔解析/取值） |
+| `JsonFile.java` | `json-file.ts` | JSON 文件读写 + POSIX 权限 (0600) |
+| `ChannelActivity.java` | `channel-activity.ts` | 渠道活动时间追踪（线程安全） |
+| `ErrorUtils.java` | `errors.ts` | 错误消息提取与格式化 |
+
+**openclaw-gateway (5 files)**
+
+| Java 文件 | TS 来源 | 功能 |
+|---|---|---|
+| `SsrfGuard.java` | `net/ssrf.ts` | SSRF 防护（私有 IP 检测 + DNS 验证 + 主机名黑名单） |
+| `FetchGuard.java` | `net/fetch-guard.ts` | 安全 HTTP 请求（SSRF 校验 + 重定向跟踪 + 超时） |
+| `HeartbeatRunner.java` | `heartbeat-runner.ts` | 定时心跳执行器（调度 + 活跃时段 + 持续时间解析） |
+| `HeartbeatVisibility.java` | `heartbeat-visibility.ts` | 心跳可见性分层配置（account > channel > defaults） |
+| `GatewayLock.java` | `gateway-lock.ts` | 网关单实例锁（NIO FileLock + PID + 过期检测） |
+
+### Design Notes
+- 所有事件总线使用 `ConcurrentHashMap` + `CopyOnWriteArraySet` 保证线程安全
+- `RuntimeGuard` 验证 JVM ≥17（对应 TS 的 Node ≥22.12）
+- `GatewayLock` 使用 Java NIO `FileLock` + `ProcessHandle.isAlive()`（替代 Node `/proc` 读取）
+- `HeartbeatRunner` 简化为 `ScheduledExecutorService` + 回调模式（TS 版本 1012 行含大量 config/channel 依赖）
+
+---
+
 ## Phase 33 — 浏览器控制模块 Stage 1-3 (2026-02-15)
 
 ### Added
