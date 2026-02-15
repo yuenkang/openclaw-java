@@ -94,11 +94,57 @@ mvn test
 
 ### 握手流程
 
+WebSocket 连接建立后，三步握手：
+
 ```
-服务端 → connect.challenge {nonce, ts}
-客户端 → req {method:"connect", params:{client, role, auth, scopes}}
-服务端 → res {payload: hello-ok {protocol, server, features, snapshot}}
+客户端                                    服务端
+  │── WebSocket 连接 ───────────────────→│
+  │←── connect.challenge {nonce, ts} ────│  (立即)
+  │── connect {client, role, auth} ─────→│  (10s 内)
+  │←── hello-ok {protocol, features} ───│  (成功)
+  │  或 error + close ──────────────────│  (失败)
 ```
+
+**Step 1 — 服务端质询：**
+
+```json
+{"type":"event", "event":"connect.challenge", "payload":{"nonce":"uuid-xxx","ts":1739520000000}}
+```
+
+**Step 2 — 客户端连接（必须是第一条请求）：**
+
+```json
+{
+  "type": "req", "id": "1", "method": "connect",
+  "params": {
+    "minProtocol": 3, "maxProtocol": 3,
+    "client": {"id":"cli", "version":"1.2.3", "platform":"macos", "mode":"operator"},
+    "role": "operator",
+    "scopes": ["operator.admin"],
+    "auth": {"token": "your-gateway-token"},
+    "device": {"id":"fingerprint", "publicKey":"...", "signature":"...", "signedAt":1739520000000, "nonce":"uuid-xxx"}
+  }
+}
+```
+
+> Node 角色额外携带 `caps`/`commands`/`permissions` 声明能力；`device.nonce` 签署 Step 1 的 nonce（本地连接可省略）。
+
+**Step 3 — 服务端响应：**
+
+```json
+{
+  "type": "res", "id": "1", "ok": true,
+  "payload": {
+    "type": "hello-ok", "protocol": 3,
+    "server": {"version":"1.2.3", "host":"hostname", "connId":"uuid"},
+    "features": {"methods":["status","config.get","..."], "events":["agent.message","..."]},
+    "auth": {"deviceToken":"eyJ...", "role":"operator", "scopes":["operator.admin"]},
+    "policy": {"tickIntervalMs":15000}
+  }
+}
+```
+
+> `auth.deviceToken` 仅在首次配对时返回，客户端应持久化供后续连接使用。
 
 ### 方法示例
 
