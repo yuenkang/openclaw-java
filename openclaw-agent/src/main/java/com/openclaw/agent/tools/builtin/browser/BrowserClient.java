@@ -47,8 +47,10 @@ public class BrowserClient {
     }
 
     /** POST /start — start browser */
-    public void start(String profile) throws IOException {
-        post("/start", profileQuery(profile), null);
+    public void start(String profile, boolean headless) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("headless", headless);
+        post("/start", profileQuery(profile), body);
     }
 
     /** POST /stop — stop browser */

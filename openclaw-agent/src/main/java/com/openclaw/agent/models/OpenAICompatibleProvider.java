@@ -346,7 +346,22 @@ public class OpenAICompatibleProvider implements ModelProvider {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("role", "tool");
                 m.put("tool_call_id", msg.getToolUseId());
-                m.put("content", msg.getContent() != null ? msg.getContent() : "");
+                // Support multimodal tool results (e.g. screenshot images)
+                if (msg.getContentParts() != null && !msg.getContentParts().isEmpty()) {
+                    List<Map<String, Object>> parts = new ArrayList<>();
+                    for (ContentPart part : msg.getContentParts()) {
+                        if ("text".equals(part.getType())) {
+                            parts.add(Map.of("type", "text", "text",
+                                    part.getText() != null ? part.getText() : ""));
+                        } else if ("image_url".equals(part.getType()) && part.getImageUrl() != null) {
+                            parts.add(Map.of("type", "image_url",
+                                    "image_url", Map.of("url", part.getImageUrl().getUrl())));
+                        }
+                    }
+                    m.put("content", parts);
+                } else {
+                    m.put("content", msg.getContent() != null ? msg.getContent() : "");
+                }
                 messages.add(m);
             } else if ("assistant".equals(msg.getRole()) && msg.getToolUses() != null && !msg.getToolUses().isEmpty()) {
                 // Assistant messages with tool calls

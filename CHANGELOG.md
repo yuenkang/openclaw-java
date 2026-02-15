@@ -1,5 +1,45 @@
 # Changelog
 
+## Phase 35 — 浏览器控制独立服务 + 截图多模态支持 (2026-02-16)
+
+### Architecture
+
+- **Browser Control Netty Server** — 浏览器控制从 Spring MVC Controller 重构为独立 Netty HTTP 服务器（端口 18791），与 TypeScript 架构对齐
+
+### Added
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `BrowserControlServer.java` | 独立 Netty HTTP 服务器（`NioEventLoopGroup` + `ServerBootstrap`），处理全部浏览器 API（start/stop/tabs/navigate/screenshot/act/console 等） |
+
+### Changed — 截图多模态支持
+
+**打通截图图片 → LLM 视觉分析完整链路：**
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `AgentTool.ToolResult` | 新增 `contentParts` 字段，支持工具返回图片等多模态内容 |
+| `AgentRunner` | Tool result 消息构建支持 `contentParts`，图片内容传递给 LLM |
+| `OpenAICompatibleProvider` | Tool message 序列化支持多模态 content（`image_url` + `text`） |
+| `BrowserTypes.ScreenshotResult` | 新增 `data`(base64)、`contentType`、`url`、`title` 字段 |
+| `BrowserTool.handleScreenshot()` | 从服务端 base64 数据构造 `image_url` content part，LLM 可"看到"截图 |
+
+### Changed — 其它
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `BrowserClient.start()` | 支持 `headless` 参数 |
+| `BrowserTool` | `start` action 默认 `headless=false`；schema 新增 `headless` boolean 参数 |
+| `OpenClawToolFactory` | `BrowserClient` base URL 更新为独立 Netty 服务器 (`http://127.0.0.1:18791`) |
+
+### Design Notes
+
+- Netty 服务器使用 `HttpServerCodec` + `HttpObjectAggregator` + `SimpleChannelInboundHandler<FullHttpRequest>` 处理 HTTP 请求
+- 截图数据流: Playwright → byte[] → Base64 → Netty JSON 响应 → BrowserClient → BrowserTool → data URI → AgentRunner → LLM vision
+- `ToolResult.contentParts` 机制是通用的，未来其它工具也可返回图片给 LLM
+
+---
+
 ## Phase 34 — infra/ 核心基础设施模块 (2026-02-15)
 
 ### Added

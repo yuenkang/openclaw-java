@@ -2,7 +2,7 @@
 
 OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gateway，通过 WebSocket 自定义帧协议（req/res/event）提供全功能 Agent 接口。
 
-> **当前进度**: Phase 33 / 594 个源文件 + 17 个测试文件 / ~88,500 行 Java 代码
+> **当前进度**: Phase 35 / 595+ 个源文件 + 17 个测试文件 / ~89,000+ 行 Java 代码
 
 💬 [加入 Telegram 讨论群组](https://t.me/+D9DiVXI3xe43ZDNl) — 欢迎讨论关于项目的一切！
 
@@ -67,7 +67,7 @@ export ANTHROPIC_BASE_URL=https://your-proxy.example.com/v1
 mvn spring-boot:run -pl openclaw-app
 ```
 
-服务启动在 `ws://127.0.0.1:3578/ws`
+服务启动在 `ws://127.0.0.1:18789/ws`
 
 ### 环境变量
 
@@ -105,7 +105,8 @@ mvn test
 
 ### Agent 执行引擎 (`openclaw-agent`)
 
-- **多轮对话**: 用户→LLM→工具→LLM→…→回复循环
+- **多轮对话**: 用户->LLM->工具->LLM->...->回复循环
+- **多模态工具返回**: 工具可返回图片等多模态内容给 LLM（截图视觉分析等）
 - **模型提供者**: Anthropic Claude、OpenAI GPT、Ollama 本地、vLLM 兼容
 - **内置工具**: 命令执行 (ExecTool)、文件读写 (FileTools)、浏览器控制 (BrowserTool)、图片分析 (ImageTool)
 - **Skills 系统**: 可扩展技能加载/过滤/注入、frontmatter 解析、环境变量覆盖、热重载 — 📖 [skills-guide.md](docs/skills-guide.md)
@@ -147,9 +148,11 @@ mvn test
 
 ### 浏览器控制 (`openclaw-app/browser`)
 
+- **独立 Netty HTTP 服务器** (端口 18791) -- 与 TypeScript 架构对齐
 - 15 种浏览器操作 (status/start/stop/tabs/snapshot/act 等)
+- **截图视觉分析** -- 截图自动作为图片发送给 LLM，LLM 可看到页面内容并分析
+- 支持有头/无头模式切换 (`headless` 参数)
 - OkHttp HTTP 客户端调用浏览器控制服务器
-- Agent Tool 集成，LLM 可通过 BrowserTool 操作浏览器
 
 ### 持久化层
 
@@ -192,7 +195,7 @@ mvn test
     "gpt4": "openai/gpt-4"
   },
   "gateway": {
-    "port": 3578,
+    "port": 18789,
     "host": "127.0.0.1"
   },
   "agents": {
@@ -224,7 +227,7 @@ mvn test
 ```
 openclaw-java/
 ├── pom.xml                     # 父 POM (Spring Boot 3.3, Java 17)
-├── CHANGELOG.md                # 变更日志 (Phase 1–33)
+├── CHANGELOG.md                # 变更日志 (Phase 1-35)
 ├── README.md                   # 本文件
 ├── doc/                        # 设计文档 + 学习路线图
 │   ├── notes/                  # 16 篇架构学习笔记
@@ -287,6 +290,8 @@ openclaw-java/
 | 31 | 微信公众号渠道 | 8 |
 | 32 | 集成测试 + WebSocket 可靠性修复 | — |
 | 33 | 浏览器控制 + 图片处理 + 持久化 + 用量追踪 | 10+ |
+| 34 | infra/ 核心基础设施模块 (重试/安全/事件/运行时) | 21 |
+| 35 | Browser Control Netty 独立服务 + 截图多模态 LLM 支持 | 8 |
 
 ## License
 

@@ -1,6 +1,7 @@
 package com.openclaw.agent.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.openclaw.agent.models.ModelProvider;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -42,6 +43,11 @@ public interface AgentTool {
         private String output;
         private Object data;
         private String error;
+        /**
+         * Multimodal content parts (text + images). When non-null,
+         * takes precedence over plain {@code output} string.
+         */
+        private java.util.List<ModelProvider.ContentPart> contentParts;
 
         public static ToolResult ok(String output) {
             return ToolResult.builder().success(true).output(output).build();

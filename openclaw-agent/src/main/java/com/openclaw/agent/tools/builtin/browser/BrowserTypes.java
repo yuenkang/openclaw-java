@@ -178,6 +178,12 @@ public final class BrowserTypes {
         private String targetId;
         /** "png" | "jpeg" */
         private String type;
+        /** Base64-encoded image data */
+        private String data;
+        /** MIME type, e.g. "image/png" */
+        private String contentType;
+        private String url;
+        private String title;
     }
 
     // ===== Navigate =====

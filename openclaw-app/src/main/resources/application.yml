@@ -1,5 +1,5 @@
 server:
-  port: 3578
+  port: 18789
 
 spring:
   application:
@@ -11,7 +11,7 @@ openclaw:
     path: ${OPENCLAW_CONFIG_PATH:~/.openclaw/config.json}
   gateway:
     host: 127.0.0.1
-    port: 3578
+    port: 18789
 
 logging:
   level:

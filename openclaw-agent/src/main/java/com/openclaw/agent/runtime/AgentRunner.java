@@ -328,11 +328,20 @@ public class AgentRunner {
                 }
 
                 // Add tool result as message
-                messages.add(ModelProvider.ChatMessage.builder()
+                ModelProvider.ChatMessage.ChatMessageBuilder toolMsg = ModelProvider.ChatMessage.builder()
                         .role("tool")
-                        .content(toolResult.isSuccess() ? toolResult.getOutput() : "Error: " + toolResult.getError())
-                        .toolUseId(toolUse.getId())
-                        .build());
+                        .toolUseId(toolUse.getId());
+                if (toolResult.getContentParts() != null && !toolResult.getContentParts().isEmpty()) {
+                    // Multimodal tool result (e.g. screenshot image)
+                    toolMsg.contentParts(toolResult.getContentParts());
+                    // Also set text content as fallback
+                    toolMsg.content(
+                            toolResult.isSuccess() ? toolResult.getOutput() : "Error: " + toolResult.getError());
+                } else {
+                    toolMsg.content(
+                            toolResult.isSuccess() ? toolResult.getOutput() : "Error: " + toolResult.getError());
+                }
+                messages.add(toolMsg.build());
             }
         }
 

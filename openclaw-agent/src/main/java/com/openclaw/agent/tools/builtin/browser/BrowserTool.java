@@ -1,10 +1,11 @@
 package com.openclaw.agent.tools.builtin.browser;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.tools.AgentTool;
-import com.openclaw.common.config.OpenClawConfig;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -15,10 +16,10 @@ import java.util.concurrent.CompletableFuture;
  * Corresponds to TypeScript's agents/tools/browser-tool.ts createBrowserTool().
  *
  * <p>
- * Uses {@link PlaywrightSession} directly (in-process) instead of HTTP.
- * Exposes 15 actions to the LLM: status, start, stop, profiles, tabs,
- * open, focus, close, snapshot, screenshot, navigate, console, pdf, upload,
- * dialog, act.
+ * Delegates all operations to {@link BrowserClient} via HTTP, which in turn
+ * calls {@link com.openclaw.app.browser.BrowserControlController}.
+ * This enables multi-profile support — the LLM can pass a {@code profile}
+ * parameter to target a specific browser profile.
  * </p>
  */
 @Slf4j
@@ -26,21 +27,15 @@ public class BrowserTool implements AgentTool {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    /**
-     * Shared singleton session — all BrowserTool instances share the same browser.
-     */
-    private static final PlaywrightSession session = new PlaywrightSession();
-
-    private final OpenClawConfig config;
-    private boolean headless = false;
+    private final BrowserClient client;
 
     /**
      * JSON Schema for the tool parameters (built once, cached).
      */
     private static final JsonNode PARAMETER_SCHEMA = buildParameterSchema();
 
-    public BrowserTool(OpenClawConfig config) {
-        this.config = config;
+    public BrowserTool(BrowserClient client) {
+        this.client = client;
     }
 
     @Override
@@ -56,7 +51,8 @@ public class BrowserTool implements AgentTool {
                 "act kinds: click, type, press, hover, scrollIntoView, drag, select, fill, resize, wait, evaluate, goBack, goForward, close.",
                 "When using refs from snapshot, keep the same tab via targetId.",
                 "screenshot supports ref/element for element-level capture.",
-                "wait supports: timeMs, text, textGone, selector, url, loadState, fn.");
+                "wait supports: timeMs, text, textGone, selector, url, loadState, fn.",
+                "Use the 'profile' param to target a specific browser profile (default: config default).");
     }
 
     @Override
@@ -76,95 +72,76 @@ public class BrowserTool implements AgentTool {
         });
     }
 
-    private ToolResult doExecute(JsonNode params) {
+    private ToolResult doExecute(JsonNode params) throws Exception {
         String action = requireString(params, "action");
+        String profile = optString(params, "profile");
 
         switch (action) {
             case "status": {
-                Map<String, Object> status = new LinkedHashMap<>();
-                status.put("enabled", true);
-                status.put("running", session.isRunning());
-                status.put("headless", headless);
+                BrowserTypes.BrowserStatus status = client.status(profile);
                 return jsonResult(status);
             }
             case "start": {
-                ensureBrowserStarted();
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("ok", true);
-                result.put("running", session.isRunning());
-                return jsonResult(result);
+                boolean headless = optBoolean(params, "headless", false);
+                client.start(profile, headless);
+                return jsonResult(Map.of("ok", true));
             }
             case "stop": {
-                boolean stopped = session.stop();
-                return jsonResult(Map.of("ok", true, "stopped", stopped));
+                client.stop(profile);
+                return jsonResult(Map.of("ok", true, "stopped", true));
             }
             case "profiles": {
-                Map<String, Object> profile = new LinkedHashMap<>();
-                profile.put("name", "default");
-                profile.put("running", session.isRunning());
-                return jsonResult(Map.of("profiles", List.of(profile)));
+                List<BrowserTypes.ProfileStatus> profiles = client.profiles();
+                return jsonResult(Map.of("profiles", profiles));
             }
             case "tabs": {
-                if (!session.isRunning()) {
-                    return jsonResult(Map.of("tabs", List.of()));
-                }
-                List<PlaywrightSession.TabInfo> tabs = session.listTabs();
+                List<BrowserTypes.BrowserTab> tabs = client.tabs(profile);
                 return jsonResult(Map.of("tabs", tabs));
             }
             case "open": {
                 String targetUrl = requireString(params, "targetUrl");
-                ensureBrowserStarted();
-                PlaywrightSession.TabInfo tab = session.openTab(targetUrl);
+                BrowserTypes.BrowserTab tab = client.openTab(targetUrl, profile);
                 return jsonResult(tab);
             }
             case "focus": {
                 String targetId = requireString(params, "targetId");
-                session.focusTab(targetId);
+                client.focusTab(targetId, profile);
                 return jsonResult(Map.of("ok", true));
             }
             case "close": {
                 String targetId = optString(params, "targetId");
                 if (targetId != null) {
-                    session.closeTab(targetId);
+                    client.closeTab(targetId, profile);
                 } else {
-                    session.act("close", null, Map.of());
+                    // Close active tab via act
+                    Map<String, Object> request = new LinkedHashMap<>();
+                    request.put("kind", "close");
+                    client.act(request, profile);
                 }
                 return jsonResult(Map.of("ok", true));
             }
             case "snapshot": {
-                return handleSnapshot(params);
+                return handleSnapshot(params, profile);
             }
             case "screenshot": {
-                return handleScreenshot(params);
+                return handleScreenshot(params, profile);
             }
             case "navigate": {
                 String targetUrl = requireString(params, "targetUrl");
                 String targetId = optString(params, "targetId");
-                ensureBrowserStarted();
-                PlaywrightSession.NavigateResult nav = session.navigate(targetUrl, targetId);
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("ok", true);
-                result.put("url", nav.getUrl());
-                result.put("title", nav.getTitle());
-                return jsonResult(result);
+                BrowserTypes.NavigateResult nav = client.navigate(targetUrl, targetId, profile);
+                return jsonResult(nav);
             }
             case "console": {
                 String targetId = optString(params, "targetId");
-                if (!session.isRunning()) {
-                    return jsonResult(Map.of("ok", true, "messages", List.of()));
-                }
-                List<PlaywrightSession.ConsoleEntry> messages = session.getConsoleMessages(targetId);
-                List<Map<String, Object>> mapped = messages.stream().map(e -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("type", e.getType());
-                    m.put("text", e.getText());
-                    m.put("timestamp", e.getTimestamp());
-                    return m;
-                }).toList();
-                return jsonResult(Map.of("ok", true, "messages", mapped));
+                String level = optString(params, "level");
+                JsonNode messages = client.consoleMessages(level, targetId, profile);
+                return jsonResult(messages);
             }
             case "pdf": {
-                return ToolResult.fail("PDF export not yet implemented");
+                String targetId = optString(params, "targetId");
+                BrowserTypes.PdfResult pdf = client.pdf(targetId, profile);
+                return jsonResult(pdf);
             }
             case "upload": {
                 return ToolResult.fail("File upload not yet implemented");
@@ -173,7 +150,7 @@ public class BrowserTool implements AgentTool {
                 return ToolResult.fail("Dialog handling not yet implemented");
             }
             case "act": {
-                return handleAct(params);
+                return handleAct(params, profile);
             }
             default:
                 return ToolResult.fail("Unknown browser action: " + action);
@@ -182,56 +159,77 @@ public class BrowserTool implements AgentTool {
 
     // ===== Action handlers =====
 
-    private ToolResult handleSnapshot(JsonNode params) {
+    private ToolResult handleSnapshot(JsonNode params, String profile) throws Exception {
+        Map<String, Object> opts = new LinkedHashMap<>();
         String targetId = optString(params, "targetId");
-        ensureBrowserStarted();
-        PlaywrightSession.SnapshotResult snap = session.snapshot(targetId);
+        if (targetId != null)
+            opts.put("targetId", targetId);
+        if (profile != null)
+            opts.put("profile", profile);
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("ok", true);
-        result.put("format", "aria");
-        result.put("snapshot", snap.getSnapshot());
-        result.put("url", snap.getUrl());
-        result.put("title", snap.getTitle());
+        BrowserTypes.SnapshotResult snap = client.snapshot(opts);
 
         // Return snapshot text as the primary content (LLM reads this)
         if (snap.getSnapshot() != null) {
-            return ToolResult.ok(snap.getSnapshot(), result);
+            return ToolResult.ok(snap.getSnapshot(), snap);
         }
-        return jsonResult(result);
+        return jsonResult(snap);
     }
 
-    private ToolResult handleScreenshot(JsonNode params) {
+    private ToolResult handleScreenshot(JsonNode params, String profile) throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
         String targetId = optString(params, "targetId");
+        if (targetId != null)
+            body.put("targetId", targetId);
         boolean fullPage = params.has("fullPage") && params.get("fullPage").asBoolean();
+        if (fullPage)
+            body.put("fullPage", true);
         String ref = optString(params, "ref");
         String element = optString(params, "element");
-        ensureBrowserStarted();
+        if (ref != null)
+            body.put("ref", ref);
+        if (element != null)
+            body.put("element", element);
 
         if (fullPage && (ref != null || element != null)) {
             return ToolResult.fail("fullPage is not supported for element screenshots");
         }
 
-        PlaywrightSession.ScreenshotResult shot = session.screenshot(targetId, fullPage, ref, element);
-        String base64 = Base64.getEncoder().encodeToString(shot.getBuffer());
+        BrowserTypes.ScreenshotResult shot = client.screenshot(body, profile);
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("ok", true);
-        result.put("data", base64);
-        result.put("contentType", shot.getContentType());
-        result.put("url", shot.getUrl());
-        result.put("title", shot.getTitle());
-        return jsonResult(result);
+        // Build multimodal result with image content part
+        if (shot.getData() != null && !shot.getData().isEmpty()) {
+            String mimeType = shot.getContentType() != null ? shot.getContentType() : "image/png";
+            String dataUri = "data:" + mimeType + ";base64," + shot.getData();
+
+            List<ModelProvider.ContentPart> parts = new ArrayList<>();
+            parts.add(ModelProvider.ContentPart.builder()
+                    .type("image_url")
+                    .imageUrl(ModelProvider.ImageUrl.builder().url(dataUri).build())
+                    .build());
+            parts.add(ModelProvider.ContentPart.builder()
+                    .type("text")
+                    .text("Screenshot captured" + (shot.getUrl() != null ? " of " + shot.getUrl() : ""))
+                    .build());
+
+            return ToolResult.builder()
+                    .success(true)
+                    .output("Screenshot captured")
+                    .contentParts(parts)
+                    .build();
+        }
+
+        return jsonResult(shot);
     }
 
-    private ToolResult handleAct(JsonNode params) {
+    private ToolResult handleAct(JsonNode params, String profile) throws Exception {
         JsonNode requestNode = params.get("request");
         if (requestNode == null || !requestNode.isObject()) {
             return ToolResult.fail("request required");
         }
 
         Map<String, Object> request = mapper.convertValue(requestNode,
-                new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, Object>>() {
+                new TypeReference<LinkedHashMap<String, Object>>() {
                 });
 
         String kind = (String) request.get("kind");
@@ -239,24 +237,11 @@ public class BrowserTool implements AgentTool {
             return ToolResult.fail("request.kind is required");
         }
 
-        String targetId = (String) request.get("targetId");
-        ensureBrowserStarted();
-
-        try {
-            Map<String, Object> result = session.act(kind, targetId, request);
-            return jsonResult(result);
-        } catch (RuntimeException e) {
-            return ToolResult.fail(e.getMessage());
-        }
+        JsonNode result = client.act(request, profile);
+        return jsonResult(result);
     }
 
     // ===== Utility methods =====
-
-    private void ensureBrowserStarted() {
-        if (!session.isRunning()) {
-            session.launch(headless);
-        }
-    }
 
     private ToolResult jsonResult(Object data) {
         try {
@@ -281,6 +266,13 @@ public class BrowserTool implements AgentTool {
             return null;
         String val = node.asText().trim();
         return val.isEmpty() ? null : val;
+    }
+
+    private static boolean optBoolean(JsonNode params, String field, boolean defaultValue) {
+        JsonNode node = params.get(field);
+        if (node == null || node.isNull())
+            return defaultValue;
+        return node.asBoolean(defaultValue);
     }
 
     // ===== JSON Schema =====
@@ -333,7 +325,7 @@ public class BrowserTool implements AgentTool {
         }
 
         // Boolean params
-        for (String f : List.of("interactive", "compact", "labels", "fullPage", "accept")) {
+        for (String f : List.of("interactive", "compact", "labels", "fullPage", "accept", "headless")) {
             props.putObject(f).put("type", "boolean");
         }
 

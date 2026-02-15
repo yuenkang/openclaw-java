@@ -2,8 +2,10 @@ package com.openclaw.agent.tools;
 
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.tools.builtin.*;
+import com.openclaw.agent.tools.builtin.browser.BrowserClient;
 import com.openclaw.agent.tools.builtin.browser.BrowserTool;
 import com.openclaw.common.config.OpenClawConfig;
+import com.openclaw.common.config.PortDefaults;
 import lombok.Builder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -89,7 +91,15 @@ public class OpenClawToolFactory {
                 tools.add(new NodesTool());
 
                 // --- Browser ---
-                tools.add(new BrowserTool(options.getConfig()));
+                // Browser control runs as standalone Netty server on controlPort (default:
+                // 18791)
+                int browserPort = PortDefaults.DEFAULT_BROWSER_CONTROL_PORT;
+                if (options.getConfig() != null && options.getConfig().getBrowser() != null
+                                && options.getConfig().getBrowser().getControlPort() != null) {
+                        browserPort = options.getConfig().getBrowser().getControlPort();
+                }
+                String browserBaseUrl = "http://127.0.0.1:" + browserPort;
+                tools.add(new BrowserTool(new BrowserClient(browserBaseUrl)));
 
                 // --- Canvas ---
                 tools.add(new CanvasTool());
