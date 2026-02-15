@@ -40,16 +40,19 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, GatewayConnection> connections = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private final Map<String, ScheduledFuture<?>> handshakeTimers = new ConcurrentHashMap<>();
+    private final EventBroadcaster eventBroadcaster;
 
     /** Application start time for uptime calculation. */
     private final long startedAt = System.currentTimeMillis();
 
     public GatewayWebSocketHandler(ObjectMapper objectMapper, GatewayMethodRouter methodRouter,
-            AuthService authService, ConfigService configService) {
+            AuthService authService, ConfigService configService,
+            EventBroadcaster eventBroadcaster) {
         this.objectMapper = objectMapper;
         this.methodRouter = methodRouter;
         this.authService = authService;
         this.configService = configService;
+        this.eventBroadcaster = eventBroadcaster;
     }
 
     @Override
@@ -312,6 +315,9 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
         connection.completeHandshake(connectParams, authMethod);
         cancelHandshakeTimer(connId);
 
+        // Register connection in EventBroadcaster for targeted event delivery
+        eventBroadcaster.addConnection(connection);
+
         // Build hello-ok
         var registeredMethods = new ArrayList<>(methodRouter.getRegisteredMethods());
         Collections.sort(registeredMethods);
@@ -350,6 +356,7 @@ public class GatewayWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String connId = session.getId();
         connections.remove(connId);
+        eventBroadcaster.removeConnection(connId);
         cancelHandshakeTimer(connId);
         log.info("ws:close conn={} code={} reason={}",
                 connId, status.getCode(), status.getReason());

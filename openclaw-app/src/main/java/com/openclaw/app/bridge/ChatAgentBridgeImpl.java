@@ -108,9 +108,15 @@ public class ChatAgentBridgeImpl implements ChatAgentBridge {
                 .build();
 
         return agentRunner.runAsync(context)
-                .thenApply(result -> new ChatRunResult(
-                        result.isSuccess(),
-                        result.getFinalMessage(),
-                        result.getError()));
+                .thenApply(result -> {
+                    long inputTokens = result.getTotalUsage() != null ? result.getTotalUsage().getInputTokens() : 0;
+                    long outputTokens = result.getTotalUsage() != null ? result.getTotalUsage().getOutputTokens() : 0;
+                    return new ChatRunResult(
+                            result.isSuccess(),
+                            result.getFinalMessage(),
+                            result.getError(),
+                            inputTokens,
+                            outputTokens);
+                });
     }
 }

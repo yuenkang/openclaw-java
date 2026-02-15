@@ -94,7 +94,7 @@ public class CoreMethodRegistrar {
 
         // Agent management
         methodRouter.registerMethod("agent", this::handleAgent);
-        methodRouter.registerMethod("agent.list", this::handleAgentList);
+        methodRouter.registerMethod("agents.list", this::handleAgentList);
         methodRouter.registerMethod("agent.identity.get", this::handleAgentIdentityGet);
 
         // Route resolution
@@ -106,23 +106,57 @@ public class CoreMethodRegistrar {
     // --- Status / Health ---
 
     private CompletableFuture<Object> handleStatus(JsonNode params, GatewayConnection conn) {
+        // Return GatewayStatusSummary format expected by TUI
+        Map<String, Object> summary = new LinkedHashMap<>();
+
+        // sessions block
+        Map<String, Object> sessions = new LinkedHashMap<>();
+        sessions.put("count", sessionStore.size());
+
+        // defaults — resolve model from config
+        Map<String, Object> defaults = new LinkedHashMap<>();
+        OpenClawConfig config = configService.loadConfig();
+        String defaultModelRaw = config.getModel();
+        // TUI expects separate modelProvider and model fields (it concatenates them)
+        String[] defaultParts = splitProviderModel(defaultModelRaw);
+        defaults.put("modelProvider", defaultParts[0]);
+        defaults.put("model", defaultParts[1]);
+        defaults.put("contextTokens", null);
+        sessions.put("defaults", defaults);
+
+        // recent sessions
+        List<Map<String, Object>> recent = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (AcpSession s : sessionStore.listSessions()) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("key", s.getSessionKey());
+            String modelRaw = s.getModel() != null ? s.getModel() : defaultModelRaw;
+            String[] parts = splitProviderModel(modelRaw);
+            entry.put("modelProvider", parts[0]);
+            entry.put("model", parts[1]);
+            entry.put("totalTokens", s.getTotalTokens());
+            entry.put("inputTokens", s.getInputTokens());
+            entry.put("outputTokens", s.getOutputTokens());
+            entry.put("updatedAt", s.getUpdatedAt());
+            if (s.getUpdatedAt() > 0) {
+                entry.put("age", now - s.getUpdatedAt());
+            }
+            recent.add(entry);
+        }
+        sessions.put("recent", recent);
+        summary.put("sessions", sessions);
+
+        // provider summary
+        List<String> providerSummary = new ArrayList<>();
         Runtime rt = Runtime.getRuntime();
-        Map<String, Object> status = new LinkedHashMap<>();
-        status.put("status", "ok");
-        status.put("version", "0.1.0");
-        status.put("uptimeMs", System.currentTimeMillis() - START_TIME);
-        status.put("sessions", sessionStore.size());
-        status.put("providers", modelCatalog.listProviders().size());
+        providerSummary.add("Java " + System.getProperty("java.version") + " | "
+                + System.getProperty("os.name") + " " + System.getProperty("os.arch"));
+        providerSummary.add("Memory: " + (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
+                + "MB / " + rt.maxMemory() / (1024 * 1024) + "MB");
+        providerSummary.add("Uptime: " + ((System.currentTimeMillis() - START_TIME) / 1000) + "s");
+        summary.put("providerSummary", providerSummary);
 
-        Map<String, Object> runtime = new LinkedHashMap<>();
-        runtime.put("javaVersion", System.getProperty("java.version"));
-        runtime.put("os", System.getProperty("os.name") + " " + System.getProperty("os.arch"));
-        runtime.put("maxMemoryMb", rt.maxMemory() / (1024 * 1024));
-        runtime.put("usedMemoryMb", (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024));
-        runtime.put("availableProcessors", rt.availableProcessors());
-        status.put("runtime", runtime);
-
-        return CompletableFuture.completedFuture(status);
+        return CompletableFuture.completedFuture(summary);
     }
 
     // --- Models ---
@@ -150,7 +184,45 @@ public class CoreMethodRegistrar {
     // --- Session Methods ---
 
     private CompletableFuture<Object> handleSessionList(JsonNode params, GatewayConnection conn) {
-        return CompletableFuture.completedFuture(sessionStore.listSessions());
+        // Return GatewaySessionList format expected by TUI
+        OpenClawConfig cfg = configService.loadConfig();
+        String defaultModel = cfg.getModel();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ts", System.currentTimeMillis());
+        result.put("count", sessionStore.size());
+
+        // defaults block
+        Map<String, Object> defaults = new LinkedHashMap<>();
+        defaults.put("model", defaultModel);
+        defaults.put("contextTokens", null);
+        result.put("defaults", defaults);
+
+        // sessions array with enriched fields
+        List<Map<String, Object>> sessions = new ArrayList<>();
+        for (AcpSession s : sessionStore.listSessions()) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("key", s.getSessionKey());
+            entry.put("sessionId", s.getSessionId());
+            entry.put("model", s.getModel() != null ? s.getModel() : defaultModel);
+            entry.put("updatedAt", s.getUpdatedAt() > 0 ? s.getUpdatedAt() : null);
+            entry.put("inputTokens", s.getInputTokens());
+            entry.put("outputTokens", s.getOutputTokens());
+            entry.put("totalTokens", s.getTotalTokens());
+            if (s.getLabel() != null) {
+                entry.put("label", s.getLabel());
+            }
+            if (s.getAgentId() != null) {
+                entry.put("agentId", s.getAgentId());
+            }
+            if (s.getThinkingLevel() != null) {
+                entry.put("thinkingLevel", s.getThinkingLevel());
+            }
+            sessions.add(entry);
+        }
+        result.put("sessions", sessions);
+
+        return CompletableFuture.completedFuture(result);
     }
 
     private CompletableFuture<Object> handleSessionCreate(JsonNode params, GatewayConnection conn) {
@@ -466,25 +538,45 @@ public class CoreMethodRegistrar {
      * agent.list — List all configured agents.
      */
     private CompletableFuture<Object> handleAgentList(JsonNode params, GatewayConnection conn) {
+        // Return GatewayAgentsList format expected by TUI
         OpenClawConfig config = configService.loadConfig();
         var agents = config.getAgents();
-        if (agents == null || agents.getList() == null) {
-            return CompletableFuture.completedFuture(Map.of("agents", Collections.emptyList()));
-        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        String defaultId = "default";
+        String mainKey = "main";
 
         List<Map<String, Object>> agentList = new ArrayList<>();
-        for (var agent : agents.getList()) {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("id", agent.getId());
-            entry.put("name", agent.getName());
-            entry.put("model", agent.getModel());
-            if (agent.getDescription() != null) {
-                entry.put("description", agent.getDescription());
+        if (agents != null && agents.getList() != null) {
+            for (var agent : agents.getList()) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("id", agent.getId());
+                entry.put("name", agent.getName());
+                if (agent.getModel() != null) {
+                    entry.put("model", agent.getModel());
+                }
+                if (agent.getDescription() != null) {
+                    entry.put("description", agent.getDescription());
+                }
+                agentList.add(entry);
             }
-            agentList.add(entry);
+            // Use first agent as default if available
+            if (!agents.getList().isEmpty()) {
+                defaultId = agents.getList().get(0).getId();
+            }
         }
 
-        return CompletableFuture.completedFuture(Map.of("agents", agentList));
+        // If no agents configured, provide a synthetic default
+        if (agentList.isEmpty()) {
+            agentList.add(Map.of("id", "default", "name", "Default Agent"));
+        }
+
+        result.put("defaultId", defaultId);
+        result.put("mainKey", mainKey);
+        result.put("scope", "per-sender");
+        result.put("agents", agentList);
+
+        return CompletableFuture.completedFuture(result);
     }
 
     /**
@@ -668,5 +760,20 @@ public class CoreMethodRegistrar {
             return value.isEmpty() ? defaultValue : value;
         }
         return defaultValue;
+    }
+
+    /**
+     * Split a "provider/model" string into [provider, model].
+     * If no slash found, provider defaults to "openai".
+     */
+    private static String[] splitProviderModel(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new String[] { "openai", "unknown" };
+        }
+        int slash = raw.indexOf('/');
+        if (slash == -1) {
+            return new String[] { "openai", raw };
+        }
+        return new String[] { raw.substring(0, slash), raw.substring(slash + 1) };
     }
 }

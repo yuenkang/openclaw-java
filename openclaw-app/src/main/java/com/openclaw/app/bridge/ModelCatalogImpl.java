@@ -38,7 +38,7 @@ public class ModelCatalogImpl implements ModelCatalog {
                 try {
                     for (ModelProvider.ModelInfo info : provider.listModels()) {
                         Map<String, Object> entry = new LinkedHashMap<>();
-                        entry.put("id", pid + "/" + info.getId());
+                        entry.put("id", info.getId());
                         entry.put("provider", pid);
                         entry.put("name", info.getName());
                         entry.put("contextWindow", info.getContextWindow());

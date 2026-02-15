@@ -90,11 +90,10 @@ public class SessionChannelMethodRegistrar {
         if (key.isEmpty()) {
             return fail("key required");
         }
-        Optional<AcpSession> opt = sessionStore.findBySessionKey(key);
-        if (opt.isEmpty()) {
-            return fail("session not found for key: " + key);
-        }
-        AcpSession session = opt.get();
+        // Try to find existing session, auto-create if not found
+        AcpSession session = sessionStore.findBySessionKey(key)
+                .orElseGet(() -> sessionStore.createSession(key,
+                        System.getProperty("user.dir")));
         sessionStore.updateSession(session.getSessionId(), s -> {
             if (params.has("label") && !params.get("label").isNull()) {
                 s.setLabel(params.get("label").asText());

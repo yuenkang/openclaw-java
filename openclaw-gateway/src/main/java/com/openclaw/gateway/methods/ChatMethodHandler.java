@@ -63,8 +63,10 @@ public class ChatMethodHandler {
     // ---- chat.send ----
 
     private CompletableFuture<Object> handleChatSend(JsonNode params, GatewayConnection conn) {
-        String sessionKey = getTextParam(params, "key", "main");
+        // TS TUI sends sessionKey (not key) and idempotencyKey as runId
+        String sessionKey = getTextParam(params, "sessionKey", "main");
         String message = getTextParam(params, "message", null);
+        String clientRunId = getTextParam(params, "idempotencyKey", null);
 
         if (message == null || message.isBlank()) {
             return CompletableFuture.failedFuture(
@@ -72,6 +74,8 @@ public class ChatMethodHandler {
         }
 
         String connectionId = conn.getConnectionId();
+        // Use client-provided runId for event correlation
+        String runId = clientRunId != null ? clientRunId : UUID.randomUUID().toString();
 
         // Find or create session
         AcpSession session = sessionStore.findBySessionKey(sessionKey)
@@ -84,7 +88,6 @@ public class ChatMethodHandler {
                     new IllegalStateException("Session " + sessionKey + " already has an active run"));
         }
 
-        String runId = UUID.randomUUID().toString();
         String sessionId = session.getSessionId();
 
         // Start the run
@@ -127,8 +130,11 @@ public class ChatMethodHandler {
                     transcriptStore.appendMessage(sessionId, "assistant", result.finalMessage());
                 }
 
-                // Update session metadata
+                // Update session metadata and token counts
                 session.setUpdatedAt(System.currentTimeMillis());
+                session.setInputTokens(session.getInputTokens() + result.inputTokens());
+                session.setOutputTokens(session.getOutputTokens() + result.outputTokens());
+                session.setTotalTokens(session.getInputTokens() + session.getOutputTokens());
             } catch (Exception e) {
                 log.error("Failed to finalize chat run {}: {}", runId, e.getMessage());
             } finally {
@@ -143,23 +149,23 @@ public class ChatMethodHandler {
             return null;
         });
 
-        // Immediately respond with runId (the actual results come via events)
+        // Immediately respond with runId and status (matches TS format)
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("runId", runId);
-        response.put("sessionId", sessionId);
-        response.put("sessionKey", sessionKey);
+        response.put("status", "started");
         return CompletableFuture.completedFuture(response);
     }
 
     // ---- chat.abort ----
 
     private CompletableFuture<Object> handleChatAbort(JsonNode params, GatewayConnection conn) {
-        String sessionKey = getTextParam(params, "key", null);
+        // TS TUI sends sessionKey (not key)
+        String sessionKey = getTextParam(params, "sessionKey", null);
         String runId = getTextParam(params, "runId", null);
 
         if (sessionKey == null && runId == null) {
             return CompletableFuture.failedFuture(
-                    new IllegalArgumentException("key or runId is required"));
+                    new IllegalArgumentException("sessionKey or runId is required"));
         }
 
         boolean aborted = false;
@@ -175,13 +181,14 @@ public class ChatMethodHandler {
             }
         }
 
-        return CompletableFuture.completedFuture(Map.of("aborted", aborted));
+        return CompletableFuture.completedFuture(Map.of("ok", true, "aborted", aborted));
     }
 
     // ---- chat.history ----
 
     private CompletableFuture<Object> handleChatHistory(JsonNode params, GatewayConnection conn) {
-        String sessionKey = getTextParam(params, "key", "main");
+        // TS TUI sends sessionKey (not key)
+        String sessionKey = getTextParam(params, "sessionKey", "main");
         int limit = params.has("limit") ? params.get("limit").asInt(50) : 50;
 
         var session = sessionStore.findBySessionKey(sessionKey);
@@ -206,13 +213,14 @@ public class ChatMethodHandler {
     // ---- chat.inject ----
 
     private CompletableFuture<Object> handleChatInject(JsonNode params, GatewayConnection conn) {
-        String sessionKey = getTextParam(params, "key", null);
+        // TS TUI sends sessionKey (not key)
+        String sessionKey = getTextParam(params, "sessionKey", null);
         String role = getTextParam(params, "role", "system");
         String content = getTextParam(params, "content", null);
 
         if (sessionKey == null) {
             return CompletableFuture.failedFuture(
-                    new IllegalArgumentException("key is required"));
+                    new IllegalArgumentException("sessionKey is required"));
         }
         if (content == null || content.isBlank()) {
             return CompletableFuture.failedFuture(
@@ -262,57 +270,88 @@ public class ChatMethodHandler {
             String runId, String sessionKey, String connectionId) {
         return new ChatAgentBridge.ChatEventListener() {
             private int seq = 0;
+            // TS gateway sends cumulative text buffer in each delta, not incremental
+            private final StringBuilder buffer = new StringBuilder();
 
             @Override
             public void onDelta(String text) {
+                // Accumulate text to send full buffer each time (matches TS emitChatDelta)
+                buffer.append(text);
+                String fullText = buffer.toString();
+
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("runId", runId);
                 payload.put("sessionKey", sessionKey);
                 payload.put("seq", seq++);
-                payload.put("text", text);
-                eventBroadcaster.sendToConnection(connectionId, "chat.delta", payload);
+                payload.put("state", "delta");
+                Map<String, Object> message = new LinkedHashMap<>();
+                message.put("role", "assistant");
+                message.put("content", List.of(Map.of("type", "text", "text", fullText)));
+                message.put("timestamp", System.currentTimeMillis());
+                payload.put("message", message);
+                eventBroadcaster.sendToConnection(connectionId, "chat", payload);
             }
 
             @Override
             public void onToolStart(String toolName, String toolId) {
+                // Tool events use "agent" event with stream="tool"
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("phase", "start");
+                data.put("name", toolName);
+                data.put("toolCallId", toolId);
+
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("runId", runId);
-                payload.put("sessionKey", sessionKey);
-                payload.put("toolName", toolName);
-                payload.put("toolId", toolId);
-                eventBroadcaster.sendToConnection(connectionId, "chat.tool.start", payload);
+                payload.put("stream", "tool");
+                payload.put("data", data);
+                eventBroadcaster.sendToConnection(connectionId, "agent", payload);
             }
 
             @Override
             public void onToolEnd(String toolName, String toolId, String result, boolean success) {
+                // Tool result events use "agent" event with stream="tool"
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("phase", "result");
+                data.put("name", toolName);
+                data.put("toolCallId", toolId);
+                data.put("result",
+                        Map.of("content", List.of(Map.of("type", "text", "text", result != null ? result : ""))));
+                data.put("isError", !success);
+
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("runId", runId);
-                payload.put("sessionKey", sessionKey);
-                payload.put("toolName", toolName);
-                payload.put("toolId", toolId);
-                payload.put("result", result);
-                payload.put("success", success);
-                eventBroadcaster.sendToConnection(connectionId, "chat.tool.end", payload);
+                payload.put("stream", "tool");
+                payload.put("data", data);
+                eventBroadcaster.sendToConnection(connectionId, "agent", payload);
             }
 
             @Override
             public void onComplete(String finalMessage) {
+                // TS TUI expects "chat" event with state="final" and structured message
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("runId", runId);
                 payload.put("sessionKey", sessionKey);
-                payload.put("status", "done");
-                payload.put("finalMessage", finalMessage);
-                eventBroadcaster.sendToConnection(connectionId, "chat.done", payload);
+                payload.put("seq", seq++);
+                payload.put("state", "final");
+                Map<String, Object> message = new LinkedHashMap<>();
+                message.put("role", "assistant");
+                message.put("content",
+                        List.of(Map.of("type", "text", "text", finalMessage != null ? finalMessage : "")));
+                message.put("stopReason", "end_turn");
+                payload.put("message", message);
+                eventBroadcaster.sendToConnection(connectionId, "chat", payload);
             }
 
             @Override
             public void onError(String error) {
+                // TS TUI expects "chat" event with state="error"
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("runId", runId);
                 payload.put("sessionKey", sessionKey);
-                payload.put("status", "error");
-                payload.put("error", error);
-                eventBroadcaster.sendToConnection(connectionId, "chat.done", payload);
+                payload.put("seq", seq++);
+                payload.put("state", "error");
+                payload.put("errorMessage", error);
+                eventBroadcaster.sendToConnection(connectionId, "chat", payload);
             }
         };
     }

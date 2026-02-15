@@ -101,6 +101,8 @@ mvn test
 
 📖 完整协议文档：[websocket-protocol.md](docs/websocket-protocol.md)（握手流程、方法示例、会话管理、Agent 对话、Cron 调度）
 
+📖 TUI 使用指南：[tui-guide.md](docs/tui-guide.md)（命令列表、模型切换、会话管理、快捷操作）
+
 ## 核心模块详解
 
 ### Agent 执行引擎 (`openclaw-agent`)

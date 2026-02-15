@@ -1,5 +1,36 @@
 # Changelog
 
+## Phase 35.1 — TUI 修复 + 文档 (2026-02-16)
+
+### Fixed
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `AgentRunner` | Agent 执行完成后正确调用 `listener.onComplete()` / `onError()`，修复 TUI 流式状态不更新 |
+| `ChatAgentBridge` | `ChatRunResult` 新增 `inputTokens` / `outputTokens` 字段 |
+| `ChatAgentBridgeImpl` | `runChat` 从 `AgentResult.totalUsage` 提取 token 用量传递给 `ChatRunResult` |
+| `ChatMethodHandler` | `handleChatSend` 完成后将 token 用量写入 `AcpSession`，修复 TUI 显示 0 tokens |
+| `CoreMethodRegistrar` | `handleStatus` 拆分 model ID 为独立的 `modelProvider` / `model` 字段，修复状态栏模型名重复前缀 |
+| `ModelCatalogImpl` | `listModels()` 的 `id` 字段不再包含 provider 前缀，修复 `/models` 选择器显示重复 |
+| `SessionChannelMethodRegistrar` | `handleSessionsPatch` 找不到 session 时自动创建，修复首次设置模型前报 "session not found" |
+| `GatewayWebSocketHandler` | WebSocket 连接可靠性修复 |
+| `WebSocketConfig` | WebSocket 配置调整 |
+| `ProtocolTypes` | 协议类型补充 |
+
+### Added
+
+| 文件 | 说明 |
+|------|------|
+| `docs/tui-guide.md` | TUI 使用指南（命令列表、模型切换、会话管理、快捷操作） |
+
+### Changed
+
+| 文件 | 说明 |
+|------|------|
+| `README.md` | 新增 TUI 使用指南文档链接 |
+
+---
+
 ## Phase 35 — 浏览器控制独立服务 + 截图多模态支持 (2026-02-16)
 
 ### Architecture

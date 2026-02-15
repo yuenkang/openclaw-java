@@ -127,11 +127,23 @@ public class AgentRunner {
                             .build());
                 }
             }
-            return executeLoop(context);
+            AgentResult result = executeLoop(context);
+            // Notify listener of completion
+            if (context.getListener() != null) {
+                if (result.isSuccess()) {
+                    context.getListener().onComplete(result.getFinalMessage());
+                } else {
+                    context.getListener().onError(result.getError());
+                }
+            }
+            return result;
         } catch (Exception e) {
             log.error("Agent run failed: {}", e.getMessage(), e);
             String errorMsg = e.getMessage() != null ? e.getMessage() : e.toString();
             ErrorClassifier.FailoverReason reason = ErrorClassifier.classifyFailoverReason(errorMsg);
+            if (context.getListener() != null) {
+                context.getListener().onError(errorMsg);
+            }
             return AgentResult.builder()
                     .success(false)
                     .error(errorMsg)

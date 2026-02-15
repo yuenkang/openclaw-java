@@ -102,7 +102,9 @@ public interface ChatAgentBridge {
     record ChatRunResult(
             boolean success,
             String finalMessage,
-            String error) {
+            String error,
+            long inputTokens,
+            long outputTokens) {
     }
 
     /**

@@ -26,8 +26,8 @@ public final class ProtocolTypes {
     private ProtocolTypes() {
     }
 
-    /** Current protocol version. Clients must support this version. */
-    public static final int PROTOCOL_VERSION = 1;
+    /** Current protocol version. Must match TypeScript PROTOCOL_VERSION (= 3). */
+    public static final int PROTOCOL_VERSION = 3;
 
     /** Maximum WebSocket payload bytes. */
     public static final int MAX_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10 MB

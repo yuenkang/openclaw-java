@@ -31,25 +31,29 @@ public class WebSocketConfig implements WebSocketConfigurer {
     private final GatewayMethodRouter methodRouter;
     private final AuthService authService;
     private final ConfigService configService;
+    private final EventBroadcaster eventBroadcaster;
 
     public WebSocketConfig(ObjectMapper objectMapper, GatewayMethodRouter methodRouter,
-            AuthService authService, ConfigService configService) {
+            AuthService authService, ConfigService configService,
+            EventBroadcaster eventBroadcaster) {
         this.objectMapper = objectMapper;
         this.methodRouter = methodRouter;
         this.authService = authService;
         this.configService = configService;
+        this.eventBroadcaster = eventBroadcaster;
     }
 
     @Override
     public void registerWebSocketHandlers(@NonNull WebSocketHandlerRegistry registry) {
-        registry.addHandler(gatewayWebSocketHandler(), "/ws")
+        // TS gateway serves WebSocket on root path only
+        registry.addHandler(gatewayWebSocketHandler(), "/")
                 .addInterceptors(connectionInterceptor())
                 .setAllowedOrigins("*");
     }
 
     @Bean
     public GatewayWebSocketHandler gatewayWebSocketHandler() {
-        return new GatewayWebSocketHandler(objectMapper, methodRouter, authService, configService);
+        return new GatewayWebSocketHandler(objectMapper, methodRouter, authService, configService, eventBroadcaster);
     }
 
     /**
