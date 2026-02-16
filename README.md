@@ -8,6 +8,8 @@ OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gatewa
 
 💬 [加入 Telegram 讨论群组](https://t.me/+D9DiVXI3xe43ZDNl) — 欢迎讨论关于项目的一切！
 
+🗣️ [GitHub Issues 灌水区](https://github.com/yuenkang/openclaw-java/issues/2) — 有问题欢迎提问 👏
+
 <img src="docs/telegram-group-qr.png" alt="Telegram 群组二维码" width="200" />
 
 ## 架构
