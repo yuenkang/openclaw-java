@@ -344,6 +344,8 @@ public class TelegramBotMessageDispatch {
      * Deliver a reply back to Telegram.
      * Automatically detects embedded images (base64 data URIs or local file paths)
      * and sends them as Telegram photos.
+     * Text delivery is delegated to {@link TelegramBotDelivery} for markdown→HTML
+     * conversion and IR-level chunking.
      */
     public static void deliverReply(
             String token,
@@ -362,19 +364,14 @@ public class TelegramBotMessageDispatch {
         String remaining = extractAndSendImages(token, chatId, text,
                 replyToMessageId, messageThreadId);
 
-        // Send remaining text (if any)
+        // Delegate text delivery to TelegramBotDelivery (markdown → HTML + chunking)
         remaining = remaining.trim();
         if (!remaining.isBlank()) {
-            // Truncate if needed
-            if (remaining.length() > textLimit) {
-                remaining = remaining.substring(0, textLimit - 3) + "...";
-            }
-
             log.debug("Delivering reply: chatId={} len={} replyTo={}",
                     chatId, remaining.length(), replyToMessageId);
 
-            TelegramSend.sendMessage(token, chatId, remaining, replyToMessageId,
-                    messageThreadId, replyToMode);
+            TelegramBotDelivery.deliverReply(token, chatId, remaining,
+                    replyToMessageId, messageThreadId, replyToMode, null);
         }
     }
 

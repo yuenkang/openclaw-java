@@ -45,9 +45,12 @@ public class TelegramOutboundAdapter implements ChannelOutboundAdapter {
 
     @Override
     public CompletableFuture<Void> sendText(OutboundTextPayload payload) {
+        // Render markdown → Telegram HTML via the IR pipeline
+        String html = TelegramFormat.markdownToTelegramHtml(payload.getText());
+
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("chat_id", payload.getTarget());
-        body.put("text", payload.getText());
+        body.put("text", html);
         body.put("parse_mode", "HTML");
 
         if (payload.getReplyTo() != null) {

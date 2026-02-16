@@ -1,5 +1,61 @@
 # Changelog
 
+## Phase 36 — 日志 · 安全 · Markdown · Providers 深度补全 (2026-02-17)
+
+### Added — logging/ 子系统日志 (openclaw-common)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `LogLevel` | `levels.ts` | 日志级别枚举 + SLF4J 映射 + 优先级排序 |
+| `LogRedact` | `redact.ts` | 16 个内置正则脱敏模式 (API key/token/PEM/Bearer) |
+| `SubsystemLogger` | `subsystem.ts` | 基于 SLF4J + MDC 的子系统日志器，支持过滤和 child logger |
+| `DiagnosticLogger` | `diagnostic.ts` | 运行时诊断：session 状态/webhook 统计/心跳/stuck 检测 |
+| `LogLineParser` | `parse-log-line.ts` | JSON 日志行解析 (time/level/subsystem/module/message) |
+| `LogRedactTest` | — | 脱敏 + 日志级别单元测试 |
+
+### Added — security/ 安全模块 (openclaw-common)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `ExternalContentSecurity` | `external-content.ts` | 15 个注入检测模式 + XML 边界隔离 + fullwidth 标记中和 |
+| `SkillScanner` | `skill-scanner.ts` | 行级 (exec/eval/ProcessBuilder) + 源码级 (exfiltration) 安全扫描 |
+| `SecurityAuditTypes` | `audit.ts` (types) | Finding/Summary/Report/AuditOptions 类型定义 |
+| `SecurityAudit` | `audit.ts` | 文件权限/敏感变量/root 检测/日志目录审计 |
+| `SecurityFix` | `fix.ts` | chmod 修复 + 凭证文件保护 + $include 路径递归解析 |
+| `ExternalContentSecurityTest` | — | 注入检测/标记中和/安全包装测试 |
+| `SkillScannerTest` | — | 行级规则/源码级规则/目录扫描/node_modules 排除测试 |
+
+### Added — markdown/ 消息格式化 (openclaw-common)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `MarkdownIR` | `ir.ts` (types) | 中间表示：text + StyleSpan + LinkSpan + Builder |
+| `MarkdownParser` | `ir.ts` (parse) | 正则 + 状态机 Markdown → IR (bold/italic/code/link/list/heading/blockquote) |
+| `MarkdownRenderer` | `render.ts` | 边界排序标记插入引擎 + Telegram HTML / Discord Markdown 预设 |
+| `MarkdownFrontmatter` | `frontmatter.ts` | YAML frontmatter 提取 (简单 key:value 解析) |
+| `MarkdownCodeSpans` | `code-spans.ts` | 代码 span/block 位置检测 (保护代码区域不被二次处理) |
+| `MarkdownRendererTest` | — | 解析 + 渲染 + frontmatter + code span 测试 |
+
+### Added — providers/ 扩展 (openclaw-agent)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `GitHubCopilotAuth` | `github-copilot-auth.ts` + `github-copilot-token.ts` | Device flow OAuth + Copilot API token 交换 + 文件缓存 + proxy-ep URL 推导 |
+| `GitHubCopilotModels` | `github-copilot-models.ts` | 模型目录常量 (gpt-4o/4.1/o1/o3-mini) + 定义构建器 |
+| `QwenPortalOAuth` | `qwen-portal-oauth.ts` | 通义千问 Portal refresh_token 刷新 |
+
+### Integrated — Markdown IR 管道 & Security 接入主流程
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramFormat` | 新增 `markdownToTelegramHtml()` / `markdownToTelegramChunks()` — 完整 IR 管道 (parse → chunk → render)；自动检测表格并通过 `MarkdownTables` 转换 |
+| `TelegramBotDelivery` | IR 级 fence-aware 分块替代朴素 `splitText()`；由 `TelegramBotMessageDispatch` 委托调用 |
+| `TelegramBotMessageDispatch` | `deliverReply()` 委托 `TelegramBotDelivery`，所有出站文本经过 markdown→HTML 管道 |
+| `TelegramOutboundAdapter` | `sendText()` 通过 `markdownToTelegramHtml()` 渲染后发送 |
+| `CommandsStatus` | `/status` 末尾追加 `SecurityAudit` 安全摘要 (critical/warn 计数) |
+| `TelegramAgentWiring` | 新增 `/fix` 命令 → `SecurityFix.fixSecurityFootguns()` |
+| `MarkdownIR.chunkText()` | 接入 `MarkdownFences.isSafeFenceBreak()` 实现 fence-aware 文本分块 |
+
 ## Phase 35.1 — TUI 修复 + 文档 (2026-02-16)
 
 ### Fixed

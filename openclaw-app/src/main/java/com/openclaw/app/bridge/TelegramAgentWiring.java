@@ -14,6 +14,7 @@ import com.openclaw.common.config.AgentDirs;
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
 import com.openclaw.common.config.SessionPaths;
+import com.openclaw.common.security.SecurityFix;
 import com.openclaw.gateway.methods.ChatAgentBridge;
 import com.openclaw.gateway.session.SessionPersistence;
 import com.openclaw.gateway.session.TranscriptStore;
@@ -370,6 +371,7 @@ public class TelegramAgentWiring {
         return switch (cmd) {
             case "/clear" -> handleClearCommand(sessionKey);
             case "/usage" -> handleUsageCommand(sessionKey);
+            case "/fix" -> handleFixCommand();
             case "/help" -> handleHelpCommand();
             default -> null; // Not a known command — pass to LLM
         };
@@ -442,12 +444,26 @@ public class TelegramAgentWiring {
         return sb.toString();
     }
 
+    /**
+     * Handle /fix — run SecurityFix and return a formatted report.
+     */
+    private String handleFixCommand() {
+        try {
+            SecurityFix.FixResult result = SecurityFix.fixSecurityFootguns();
+            return SecurityFix.formatResult(result);
+        } catch (Exception e) {
+            log.error("Security fix failed: {}", e.getMessage(), e);
+            return "❌ 安全修复执行失败: " + e.getMessage();
+        }
+    }
+
     private String handleHelpCommand() {
         return """
                 🤖 *可用命令*
 
                 /clear - 清除当前对话历史
                 /usage - 查看用量统计
+                /fix - 修复常见安全问题
                 /help - 显示此帮助信息
 
                 其他消息将直接与 AI 对话。""";

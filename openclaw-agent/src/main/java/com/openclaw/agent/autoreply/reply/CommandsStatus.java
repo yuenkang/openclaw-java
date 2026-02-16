@@ -1,6 +1,9 @@
 package com.openclaw.agent.autoreply.reply;
 
 import com.openclaw.agent.autoreply.AutoReplyTypes;
+import com.openclaw.common.security.SecurityAudit;
+import com.openclaw.common.security.SecurityAuditTypes;
+import com.openclaw.common.security.SecurityAuditTypes.AuditOptions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -110,6 +113,21 @@ public final class CommandsStatus {
         // Compaction
         if (params.compactionCount() != null && params.compactionCount() > 0) {
             lines.add("**Compacted**: " + params.compactionCount() + " time(s)");
+        }
+
+        // Security audit summary
+        try {
+            SecurityAuditTypes.Report report = SecurityAudit.runSecurityAudit(AuditOptions.defaults());
+            SecurityAuditTypes.Summary summary = report.summary();
+            if (summary.critical() > 0 || summary.warn() > 0) {
+                lines.add("");
+                lines.add("🔒 **Security**: "
+                        + (summary.critical() > 0 ? "🔴 " + summary.critical() + " critical " : "")
+                        + (summary.warn() > 0 ? "🟡 " + summary.warn() + " warning(s)" : "")
+                        + (summary.info() > 0 ? " · " + summary.info() + " info" : ""));
+            }
+        } catch (Exception e) {
+            // Security audit is best-effort; don't fail /status
         }
 
         String text = String.join("\n", lines);

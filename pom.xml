@@ -41,6 +41,7 @@
         <playwright.version>1.50.0</playwright.version>
         <lombok.version>1.18.34</lombok.version>
         <mapstruct.version>1.6.3</mapstruct.version>
+        <flexmark.version>0.64.8</flexmark.version>
     </properties>
 
     <dependencyManagement>
@@ -117,6 +118,13 @@
                 <artifactId>playwright</artifactId>
                 <version>${playwright.version}</version>
             </dependency>
+            <!-- Flexmark Markdown Parser -->
+            <dependency>
+                <groupId>com.vladsch.flexmark</groupId>
+                <artifactId>flexmark-all</artifactId>
+                <version>${flexmark.version}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 

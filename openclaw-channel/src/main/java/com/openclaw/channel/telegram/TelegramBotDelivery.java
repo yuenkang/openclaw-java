@@ -6,16 +6,18 @@ import java.util.*;
 
 /**
  * Telegram message delivery: sends final agent replies to Telegram chats.
- * Handles text splitting, reply threading, and embed attachments.
+ * Handles markdown→HTML conversion, IR-based chunking, and reply threading.
  * Corresponds to TypeScript's telegram/bot/delivery.ts.
  */
 @Slf4j
 public class TelegramBotDelivery {
 
-    private static final int TELEGRAM_TEXT_LIMIT = 4096;
+    private static final int TELEGRAM_TEXT_LIMIT = TelegramFormat.TELEGRAM_TEXT_LIMIT;
 
     /**
      * Deliver a reply payload to a Telegram chat.
+     * Converts each text part from markdown to Telegram HTML, then chunks via the
+     * IR pipeline for fence-aware, span-preserving splits.
      */
     public static void deliverReplies(
             String token, String chatId,
@@ -23,21 +25,42 @@ public class TelegramBotDelivery {
             String replyToMessageId,
             Integer messageThreadId,
             String replyToMode) {
+        deliverReplies(token, chatId, textParts, replyToMessageId,
+                messageThreadId, replyToMode, null);
+    }
+
+    /**
+     * Deliver a reply payload with optional table mode.
+     */
+    public static void deliverReplies(
+            String token, String chatId,
+            List<String> textParts,
+            String replyToMessageId,
+            Integer messageThreadId,
+            String replyToMode,
+            String tableMode) {
 
         if (textParts == null || textParts.isEmpty())
             return;
 
-        for (int i = 0; i < textParts.size(); i++) {
-            String text = textParts.get(i);
+        boolean firstMessage = true;
+        for (String text : textParts) {
             if (text == null || text.isBlank())
                 continue;
 
-            // Split text into chunks if it exceeds the Telegram limit
-            List<String> chunks = splitText(text, TELEGRAM_TEXT_LIMIT);
+            // Use the IR pipeline: markdown → IR → chunk → render HTML
+            List<String> htmlChunks = TelegramFormat.markdownToTelegramHtmlChunks(
+                    text, TELEGRAM_TEXT_LIMIT, tableMode);
 
-            for (int j = 0; j < chunks.size(); j++) {
-                String replyId = (i == 0 && j == 0) ? replyToMessageId : null;
-                TelegramSend.sendMessage(token, chatId, chunks.get(j),
+            if (htmlChunks.isEmpty()) {
+                // Fallback: send as plain text if IR pipeline returns empty
+                htmlChunks = splitText(text, TELEGRAM_TEXT_LIMIT);
+            }
+
+            for (String chunk : htmlChunks) {
+                String replyId = firstMessage ? replyToMessageId : null;
+                firstMessage = false;
+                TelegramSend.sendMessage(token, chatId, chunk,
                         replyId, messageThreadId, replyToMode);
             }
         }
@@ -54,17 +77,24 @@ public class TelegramBotDelivery {
         if (text == null || text.isBlank())
             return;
 
-        List<String> chunks = splitText(text, TELEGRAM_TEXT_LIMIT);
-        for (int i = 0; i < chunks.size(); i++) {
+        List<String> htmlChunks = TelegramFormat.markdownToTelegramHtmlChunks(
+                text, TELEGRAM_TEXT_LIMIT, null);
+
+        if (htmlChunks.isEmpty()) {
+            htmlChunks = splitText(text, TELEGRAM_TEXT_LIMIT);
+        }
+
+        for (int i = 0; i < htmlChunks.size(); i++) {
             String replyId = (i == 0) ? replyToMessageId : null;
-            Map<String, Object> keyboard = (i == chunks.size() - 1) ? inlineKeyboard : null;
-            TelegramSend.sendMessage(token, chatId, chunks.get(i),
+            Map<String, Object> keyboard = (i == htmlChunks.size() - 1) ? inlineKeyboard : null;
+            TelegramSend.sendMessage(token, chatId, htmlChunks.get(i),
                     replyId, messageThreadId, replyToMode, keyboard);
         }
     }
 
     /**
-     * Split text into chunks at paragraph or sentence boundaries.
+     * Fallback text splitter at paragraph or newline boundaries.
+     * Used only when the IR pipeline returns empty results.
      */
     public static List<String> splitText(String text, int maxLength) {
         if (text.length() <= maxLength) {
