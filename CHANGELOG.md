@@ -1,6 +1,77 @@
 # Changelog
 
+## Phase 37 — 命令系统重构 · 访问控制 · 配置热加载 (2026-02-17)
+
+### Refactored — 命令系统 (openclaw-app)
+
+将 `TelegramAgentWiring` 中的命令处理拆分为独立的 channel-agnostic 命令系统：
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `CommandProcessor` | [NEW] 命令路由核心 — 注册/查找/执行命令 |
+| `CommandContext` | [NEW] 统一命令上下文 (sessionKey/senderId/config/参数解析) |
+| `CommandResult` | [NEW] 命令结果 (text + optional inline buttons) |
+| `CommandHandler` | [NEW] 命令处理器接口 |
+| `CommandUtils` | [NEW] 命令工具 (参数解析/配置读取) |
+| `CommandAuthorization` | [NEW] 命令权限检查 (owner only) |
+| `AllowlistCommands` | [NEW] `/allowlist` — addme/removeme/list/add/remove |
+| `SessionCommands` | [NEW] `/clear` `/usage` — 会话管理 |
+| `ModelCommands` | [NEW] `/model` `/models` — 模型切换 + 分页键盘 |
+| `InfoCommands` | [NEW] `/help` `/status` `/commands` — 信息查询 |
+| `ConfigCommands` | [NEW] `/config` — 配置查看/修改 |
+| `PluginCommands` | [NEW] `/plugins` — 插件列表 |
+| `BashCommands` | [NEW] `/bash` — Shell 命令 |
+| `SubagentCommands` | [NEW] `/subagent` — 子 agent 管理 |
+| `ToolCommands` | [NEW] `/tools` — 工具列表 |
+| `TtsCommands` | [NEW] `/tts` — 语音合成 |
+| `ApproveCommands` | [NEW] `/approve` — 操作审批 |
+
+### Fixed — 访问控制对齐 TS
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramBotHandlers` | 移除 `handleTextMessage` 中的全局 `isSenderAllowed` 检查 — TS 中无此前置拦截 |
+| `TelegramBotMessageDispatch` | DM 访问检查移至 dispatch 层，合并 `allowFrom` + `ownerAllowFrom`；`/start` 免检 |
+| `TelegramBotAccess` | 新增 `normalizeAllowFromWithStore()` 合并静态 + 运行时白名单 |
+
+### Fixed — 配置热加载
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramBot.TelegramBotContext` | 新增 `configSupplier` (`Supplier<OpenClawConfig>`) + `getLatestConfig()` |
+| `TelegramBot.processMessage` | 每条消息调用 `ctx.getLatestConfig()` 获取最新配置（含 runtime overrides） |
+| `ChannelBeanConfig` | 初始化时注入 `configService::loadConfig` 作为 supplier |
+
+### Added — 群组策略 (对齐 TS bot-handlers.ts L695-773)
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramBot.processMessage` | 完整群组策略：group/topic `enabled` 检查 → per-group `allowFrom` override → `groupPolicy` (open/disabled/allowlist) → 群组 ID 白名单 |
+| `TelegramBotHelpers` | 新增 `resolveForumThreadId(boolean, Integer)` 重载 |
+
+### Changed — 消息派发增强
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramBotMessageDispatch` | 新增 `CommandHandlerResult` (text + inline buttons)、`CallbackQueryHandler` 接口、`/start` 欢迎消息 |
+| `TelegramBotHandlers` | 新增 `callback_query` 处理（inline button 回调） |
+| `TelegramSend` | 新增 `InlineButton` record + `buildInlineKeyboard()` 工具方法 |
+| `TelegramBotDelivery` | `deliverReply` 支持 inline keyboard buttons |
+| `CommandsRegistryData` | 命令注册数据结构重构，支持分页 |
+| `TelegramAgentWiring` | 命令处理委托 `CommandProcessor`；新增 `CallbackQueryHandler` 注入 |
+
+### Changed — 配置与基础设施
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `ConfigRuntimeOverrides` | 新增 `setConfigOverride(path, value)` 支持嵌套路径 (如 `commands.ownerAllowFrom`) |
+| `ConfigService` | 增强 `doLoadConfig` 日志输出 + override 应用优化 |
+| `MarkdownParser` | 修复 blockquote 解析边界问题 |
+
+---
+
 ## Phase 36 — 日志 · 安全 · Markdown · Providers 深度补全 (2026-02-17)
+
 
 ### Added — logging/ 子系统日志 (openclaw-common)
 

@@ -134,6 +134,8 @@ public class TelegramBotAccess {
 
     /**
      * Convenience: check if a sender is allowed based on config and message data.
+     * Merges Telegram allowFrom with commands.ownerAllowFrom (matches TS
+     * normalizeAllowFromWithStore).
      */
     @SuppressWarnings("unchecked")
     public static boolean isSenderAllowed(
@@ -148,16 +150,23 @@ public class TelegramBotAccess {
         String senderId = String.valueOf(sender.getOrDefault("id", ""));
         String senderUsername = (String) sender.get("username");
 
-        // Resolve allow-from from config
+        // Resolve allow-from from Telegram config
         var tgConfig = TelegramBotHelpers.resolveTelegramAccountConfig(config, accountId);
-        if (tgConfig == null)
-            return true; // no config = allow all
+        List<String> allowFrom = tgConfig != null ? TelegramBotHelpers.resolveAllowFrom(tgConfig) : List.of();
 
-        List<String> allowFrom = TelegramBotHelpers.resolveAllowFrom(tgConfig);
-        NormalizedAllowFrom normalized = normalizeAllowFrom(allowFrom);
+        // Also merge commands.ownerAllowFrom (corresponds to TS storeAllowFrom)
+        List<String> ownerAllowFrom = List.of();
+        if (config.getCommands() != null && config.getCommands().getOwnerAllowFrom() != null) {
+            ownerAllowFrom = config.getCommands().getOwnerAllowFrom().stream()
+                    .map(String::valueOf)
+                    .toList();
+        }
 
-        log.debug("Access check: senderId={} senderUsername={} allowFrom={} normalized={} hasEntries={} hasWildcard={}",
-                senderId, senderUsername, allowFrom, normalized.entries(), normalized.hasEntries(),
+        NormalizedAllowFrom normalized = normalizeAllowFromWithStore(allowFrom, ownerAllowFrom);
+
+        log.debug(
+                "Access check: senderId={} senderUsername={} allowFrom={} ownerAllowFrom={} hasEntries={} hasWildcard={}",
+                senderId, senderUsername, allowFrom, ownerAllowFrom, normalized.hasEntries(),
                 normalized.hasWildcard());
 
         boolean result = isSenderAllowed(normalized, senderId, senderUsername);

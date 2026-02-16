@@ -1,5 +1,6 @@
 package com.openclaw.app.bridge;
 
+import com.openclaw.app.commands.CommandProcessor;
 import com.openclaw.agent.autoreply.reply.GetReply;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
@@ -14,7 +15,6 @@ import com.openclaw.common.config.AgentDirs;
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
 import com.openclaw.common.config.SessionPaths;
-import com.openclaw.common.security.SecurityFix;
 import com.openclaw.gateway.methods.ChatAgentBridge;
 import com.openclaw.gateway.session.SessionPersistence;
 import com.openclaw.gateway.session.TranscriptStore;
@@ -51,16 +51,21 @@ public class TelegramAgentWiring {
     private final AgentRunner agentRunner;
     private final ToolRegistry toolRegistry;
     private final ConfigService configService;
+    private final ModelProviderRegistry modelProviderRegistry;
+    private final CommandProcessor commandProcessor;
 
     public TelegramAgentWiring(
             ChatAgentBridge chatAgentBridge,
             ModelProviderRegistry modelProviderRegistry,
             ToolRegistry toolRegistry,
-            ConfigService configService) {
+            ConfigService configService,
+            CommandProcessor commandProcessor) {
         this.chatAgentBridge = chatAgentBridge;
         this.agentRunner = new AgentRunner(modelProviderRegistry, toolRegistry);
         this.toolRegistry = toolRegistry;
         this.configService = configService;
+        this.modelProviderRegistry = modelProviderRegistry;
+        this.commandProcessor = commandProcessor;
     }
 
     @PostConstruct
@@ -79,7 +84,10 @@ public class TelegramAgentWiring {
         // 4. Wire command handler for /clear, /usage, etc.
         TelegramBotMessageDispatch.setCommandHandler(this::handleCommand);
 
-        // 5. Wire send_image tool — resolve bot token and inject image sender
+        // 5. Wire callback query handler for inline button presses (pagination)
+        TelegramBotMessageDispatch.setCallbackQueryHandler(this::handleCallbackQuery);
+
+        // 6. Wire send_image tool — resolve bot token and inject image sender
         wireTelegramImageSender();
 
         log.info("Telegram auto-reply pipeline wired successfully");
@@ -354,119 +362,68 @@ public class TelegramAgentWiring {
     }
 
     // =========================================================================
-    // Command handler — /clear, /usage
+    // Command handler — delegates to channel-agnostic CommandProcessor
     // =========================================================================
 
     /**
-     * Handle slash commands. Returns reply text if handled, null to pass through.
+     * Handle slash commands. Returns CommandHandlerResult if handled, null to pass
+     * through.
+     * Bridges app-layer CommandResult → channel-layer CommandHandlerResult.
      */
-    private String handleCommand(String command, String sessionKey, OpenClawConfig config) {
-        String cmd = command.trim().toLowerCase();
-        // Strip bot username suffix (e.g. /clear@mybotname)
-        int atIdx = cmd.indexOf('@');
-        if (atIdx > 0) {
-            cmd = cmd.substring(0, atIdx);
-        }
-
-        return switch (cmd) {
-            case "/clear" -> handleClearCommand(sessionKey);
-            case "/usage" -> handleUsageCommand(sessionKey);
-            case "/fix" -> handleFixCommand();
-            case "/help" -> handleHelpCommand();
-            default -> null; // Not a known command — pass to LLM
-        };
-    }
-
-    private String handleClearCommand(String sessionKey) {
-        String agentId = AgentDirs.DEFAULT_AGENT_ID;
-        Path storePath = SessionPaths.resolveDefaultSessionStorePath(agentId);
-        var store = SessionPersistence.loadSessionStore(storePath);
-        var existing = store.get(sessionKey);
-
-        if (existing != null) {
-            Path transcriptPath = SessionPaths.resolveSessionTranscriptPath(
-                    existing.sessionId(), agentId);
-            TranscriptStore.clearTranscript(transcriptPath, existing.sessionId());
-
-            // Also clear usage for this session
-            Path usagePath = UsageTracker.resolveUsagePath(transcriptPath);
-            try {
-                if (java.nio.file.Files.exists(usagePath)) {
-                    java.nio.file.Files.delete(usagePath);
-                }
-            } catch (Exception e) {
-                log.warn("Failed to clear usage file: {}", e.getMessage());
-            }
-
-            log.info("Cleared session history: {}", sessionKey);
-            return "✅ 对话历史已清除。新的对话将从头开始。";
-        }
-
-        return "✅ 当前没有对话历史。";
-    }
-
-    private String handleUsageCommand(String sessionKey) {
-        String agentId = AgentDirs.DEFAULT_AGENT_ID;
-        Path storePath = SessionPaths.resolveDefaultSessionStorePath(agentId);
-        var store = SessionPersistence.loadSessionStore(storePath);
-        var existing = store.get(sessionKey);
-
-        if (existing == null) {
-            return "📊 当前尚无用量记录。";
-        }
-
-        Path transcriptPath = SessionPaths.resolveSessionTranscriptPath(
-                existing.sessionId(), agentId);
-        Path usagePath = UsageTracker.resolveUsagePath(transcriptPath);
-        UsageTracker.UsageSummary summary = UsageTracker.summarizeUsage(usagePath);
-
-        if (summary.callCount() == 0) {
-            return "📊 当前尚无用量记录。";
-        }
-
-        int msgCount = TranscriptStore.countMessages(transcriptPath);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("📊 *用量统计*\n\n");
-        sb.append(String.format("💬 对话轮数: %d\n", msgCount / 2));
-        sb.append(String.format("🤖 LLM 调用: %d 次\n", summary.callCount()));
-        sb.append(String.format("📥 输入 tokens: %,d\n", summary.totalInputTokens()));
-        sb.append(String.format("📤 输出 tokens: %,d\n", summary.totalOutputTokens()));
-        if (summary.totalCacheReadTokens() > 0) {
-            sb.append(String.format("♻️ 缓存读取: %,d\n", summary.totalCacheReadTokens()));
-        }
-        sb.append(String.format("📈 总 tokens: %,d\n", summary.totalTokens()));
-        sb.append(String.format("💰 估算成本: $%.4f\n", summary.totalEstimatedCost()));
-        if (summary.lastModel() != null) {
-            sb.append(String.format("🏷️ 模型: %s", summary.lastModel()));
-        }
-
-        return sb.toString();
+    private TelegramBotMessageDispatch.CommandHandlerResult handleCommand(
+            String command, String sessionKey, String senderId, OpenClawConfig config) {
+        var result = commandProcessor.handleCommand(command, sessionKey, senderId, config);
+        if (result == null)
+            return null;
+        return toHandlerResult(result);
     }
 
     /**
-     * Handle /fix — run SecurityFix and return a formatted report.
+     * Handle callback query (inline button press).
+     * Currently supports commands_page_N for /commands pagination.
      */
-    private String handleFixCommand() {
-        try {
-            SecurityFix.FixResult result = SecurityFix.fixSecurityFootguns();
-            return SecurityFix.formatResult(result);
-        } catch (Exception e) {
-            log.error("Security fix failed: {}", e.getMessage(), e);
-            return "❌ 安全修复执行失败: " + e.getMessage();
+    private TelegramBotMessageDispatch.CommandHandlerResult handleCallbackQuery(
+            String callbackData, OpenClawConfig config) {
+        if (callbackData == null)
+            return null;
+
+        // Handle commands pagination: commands_page_N
+        if (callbackData.startsWith("commands_page_")) {
+            String suffix = callbackData.substring("commands_page_".length());
+            if ("noop".equals(suffix)) {
+                return null; // Page counter button — do nothing
+            }
+            try {
+                int page = Integer.parseInt(suffix);
+                var result = commandProcessor.getInfoCommands().handleCommandsPage(page);
+                if (result != null) {
+                    return toHandlerResult(result);
+                }
+            } catch (NumberFormatException e) {
+                log.debug("Invalid page number in callback data: {}", callbackData);
+            }
         }
+
+        return null;
     }
 
-    private String handleHelpCommand() {
-        return """
-                🤖 *可用命令*
-
-                /clear - 清除当前对话历史
-                /usage - 查看用量统计
-                /fix - 修复常见安全问题
-                /help - 显示此帮助信息
-
-                其他消息将直接与 AI 对话。""";
+    /**
+     * Convert app-layer CommandResult to channel-layer CommandHandlerResult.
+     */
+    private static TelegramBotMessageDispatch.CommandHandlerResult toHandlerResult(
+            com.openclaw.app.commands.CommandResult result) {
+        List<List<TelegramSend.InlineButton>> buttons = null;
+        if (result.hasButtons()) {
+            buttons = new java.util.ArrayList<>();
+            for (var row : result.buttons()) {
+                var btnRow = new java.util.ArrayList<TelegramSend.InlineButton>();
+                for (var btn : row) {
+                    btnRow.add(new TelegramSend.InlineButton(btn.text(), btn.callbackData()));
+                }
+                buttons.add(btnRow);
+            }
+        }
+        return new TelegramBotMessageDispatch.CommandHandlerResult(result.text(), buttons);
     }
 
     // =========================================================================

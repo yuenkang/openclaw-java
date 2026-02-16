@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,6 +47,10 @@ public class ConfigService {
                 .expireAfterWrite(cacheTtl)
                 .maximumSize(1)
                 .build();
+
+        // Invalidate cache when runtime overrides change so next loadConfig() picks up
+        // new values
+        ConfigRuntimeOverrides.setOnOverrideChanged(() -> cache.invalidateAll());
     }
 
     /**
@@ -64,16 +69,64 @@ public class ConfigService {
     }
 
     /**
-     * Save the given config to disk and invalidate the cache.
-     * Corresponds to TypeScript's config.set / config.apply logic.
+     * Save config changes to disk, preserving original file structure.
+     * Only applies runtime overrides on top of the original raw JSON;
+     * all other fields (including nulls and empty objects) remain untouched.
      */
+    @SuppressWarnings("unchecked")
     public void saveConfig(OpenClawConfig config) throws IOException {
         Files.createDirectories(configPath.getParent());
+
+        // Read the original file as a raw LinkedHashMap to preserve key order and all
+        // values
+        Map<String, Object> original = new LinkedHashMap<>();
+        if (Files.exists(configPath)) {
+            try {
+                String raw = Files.readString(configPath);
+                original = objectMapper.readValue(raw, LinkedHashMap.class);
+            } catch (Exception e) {
+                log.warn("Could not read original config: {}", e.getMessage());
+                // Fallback: serialize the full config object
+                original = objectMapper.convertValue(config, LinkedHashMap.class);
+            }
+        }
+
+        // Apply only runtime overrides on top of the original
+        Map<String, Object> overrides = ConfigRuntimeOverrides.getConfigOverrides();
+        Map<String, Object> merged = overrides.isEmpty()
+                ? original
+                : deepMerge(original, overrides);
+
         String json = objectMapper.writerWithDefaultPrettyPrinter()
-                .writeValueAsString(config);
+                .writeValueAsString(merged);
         Files.writeString(configPath, json);
         cache.invalidateAll();
         log.info("Config saved to: {}", configPath);
+    }
+
+    /**
+     * Deep-merge override values into the base map.
+     * Base map key order is preserved; new keys from overrides are appended.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> deepMerge(
+            Map<String, Object> base, Map<String, Object> overrides) {
+        Map<String, Object> result = new LinkedHashMap<>(base);
+
+        for (var entry : overrides.entrySet()) {
+            String key = entry.getKey();
+            Object overrideVal = entry.getValue();
+            Object baseVal = result.get(key);
+
+            if (baseVal instanceof Map && overrideVal instanceof Map) {
+                result.put(key, deepMerge(
+                        (Map<String, Object>) baseVal, (Map<String, Object>) overrideVal));
+            } else {
+                result.put(key, overrideVal);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -83,25 +136,38 @@ public class ConfigService {
         return configPath;
     }
 
+    @SuppressWarnings("unchecked")
     private OpenClawConfig doLoadConfig() {
         try {
+            OpenClawConfig config;
             if (!Files.exists(configPath)) {
                 log.warn("Config file not found: {}, using defaults", configPath);
-                return applyDefaults(new OpenClawConfig());
+                config = applyDefaults(new OpenClawConfig());
+            } else {
+                String raw = Files.readString(configPath);
+
+                // Environment variable substitution
+                raw = substituteEnvVars(raw);
+
+                // Parse JSON
+                config = objectMapper.readValue(raw, OpenClawConfig.class);
+
+                // Apply defaults
+                config = applyDefaults(config);
+
+                log.info("Config loaded from: {}", configPath);
             }
 
-            String raw = Files.readString(configPath);
+            // Apply runtime overrides (mirrors TypeScript's applyConfigOverrides at end of
+            // loadConfig)
+            Map<String, Object> overrides = ConfigRuntimeOverrides.getConfigOverrides();
+            if (!overrides.isEmpty()) {
+                Map<String, Object> configMap = objectMapper.convertValue(config, Map.class);
+                Map<String, Object> merged = ConfigRuntimeOverrides.applyConfigOverrides(configMap);
+                config = objectMapper.convertValue(merged, OpenClawConfig.class);
+                log.debug("Applied {} runtime override(s)", overrides.size());
+            }
 
-            // Environment variable substitution
-            raw = substituteEnvVars(raw);
-
-            // Parse JSON
-            OpenClawConfig config = objectMapper.readValue(raw, OpenClawConfig.class);
-
-            // Apply defaults
-            config = applyDefaults(config);
-
-            log.info("Config loaded from: {}", configPath);
             return config;
 
         } catch (IOException e) {

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -49,6 +50,11 @@ public class TelegramBot {
     public static class TelegramBotContext {
         private TelegramBotOptions options;
         private OpenClawConfig config;
+        /**
+         * Supplier for fresh config with runtime overrides applied. Falls back to
+         * static config.
+         */
+        private Supplier<OpenClawConfig> configSupplier;
         private String botUsername;
         private long botId;
         private TelegramBotUpdates.UpdateDedupe updateDedupe;
@@ -58,6 +64,14 @@ public class TelegramBot {
         private boolean running = false;
         /** Stored handler params (with processMessage callback) for use in pollLoop. */
         private TelegramBotHandlers.RegisterHandlerParams handlerParams;
+
+        /** Get the latest config (from supplier if available, otherwise static). */
+        public OpenClawConfig getLatestConfig() {
+            if (configSupplier != null) {
+                return configSupplier.get();
+            }
+            return config;
+        }
     }
 
     // =========================================================================
@@ -84,6 +98,25 @@ public class TelegramBot {
             }
         }
         return "open";
+    }
+
+    /** Return the first non-null List. */
+    @SafeVarargs
+    static List<String> firstDefinedList(List<String>... values) {
+        for (List<String> v : values) {
+            if (v != null)
+                return v;
+        }
+        return null;
+    }
+
+    /** Return the first non-null String. */
+    static String firstDefinedString(String... values) {
+        for (String v : values) {
+            if (v != null)
+                return v;
+        }
+        return null;
     }
 
     /**
@@ -121,21 +154,145 @@ public class TelegramBot {
                 .mediaMaxBytes(ctx.getOptions().getMediaMaxMb() * 1024 * 1024)
                 .groupAllowFrom(ctx.getOptions().getGroupAllowFrom())
                 .processMessage((message, media) -> {
+                    // Reload config on each message to pick up runtime overrides
+                    OpenClawConfig latestConfig = ctx.getLatestConfig();
+
+                    // --- Group policy filtering (matches TS bot-handlers.ts L695-773) ---
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> chat = message.get("chat") instanceof Map
+                            ? (Map<String, Object>) message.get("chat")
+                            : null;
+                    String chatId = chat != null ? String.valueOf(chat.get("id")) : "";
+                    String chatType = chat != null
+                            ? (String) chat.getOrDefault("type", "private")
+                            : "private";
+                    boolean isGroup = "group".equals(chatType) || "supergroup".equals(chatType);
+                    boolean isForum = chat != null && Boolean.TRUE.equals(chat.get("is_forum"));
+                    Integer messageThreadId = message.get("message_thread_id") instanceof Number n
+                            ? n.intValue()
+                            : null;
+
+                    if (isGroup) {
+                        var tgConfig = TelegramBotHelpers.resolveTelegramAccountConfig(
+                                latestConfig, accountId);
+                        var groupConfig = TelegramBotHelpers.resolveGroupConfig(tgConfig, chatId);
+                        Integer resolvedThreadId = TelegramBotHelpers.resolveForumThreadId(
+                                isForum, messageThreadId);
+                        var topicConfig = resolvedThreadId != null
+                                ? TelegramBotHelpers.resolveTopicConfig(
+                                        tgConfig, chatId, resolvedThreadId)
+                                : null;
+
+                        // 1. Group/topic enabled check
+                        if (groupConfig != null && Boolean.FALSE.equals(groupConfig.get("enabled"))) {
+                            log.debug("Blocked group {} (group disabled)", chatId);
+                            return;
+                        }
+                        if (topicConfig != null && Boolean.FALSE.equals(topicConfig.get("enabled"))) {
+                            log.debug("Blocked topic {} in group {} (topic disabled)",
+                                    resolvedThreadId, chatId);
+                            return;
+                        }
+
+                        // 2. Per-group/topic allowFrom override
+                        @SuppressWarnings("unchecked")
+                        List<String> groupAllowOverride = firstDefinedList(
+                                topicConfig != null ? (List<String>) topicConfig.get("allowFrom") : null,
+                                groupConfig != null ? (List<String>) groupConfig.get("allowFrom") : null);
+                        List<String> effectiveGroupAllowFrom = groupAllowOverride != null
+                                ? groupAllowOverride
+                                : ctx.getOptions().getGroupAllowFrom();
+
+                        // Merge with ownerAllowFrom (storeAllowFrom)
+                        List<String> ownerAllowFrom = List.of();
+                        if (latestConfig.getCommands() != null
+                                && latestConfig.getCommands().getOwnerAllowFrom() != null) {
+                            ownerAllowFrom = latestConfig.getCommands().getOwnerAllowFrom().stream()
+                                    .map(String::valueOf).toList();
+                        }
+                        var effectiveGroupAllow = TelegramBotAccess.normalizeAllowFromWithStore(
+                                effectiveGroupAllowFrom, ownerAllowFrom);
+
+                        if (groupAllowOverride != null) {
+                            // Per-group override: sender must be in allowFrom
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> from = message.get("from") instanceof Map
+                                    ? (Map<String, Object>) message.get("from")
+                                    : null;
+                            String senderId = from != null ? String.valueOf(from.get("id")) : "";
+                            String senderUsername = from != null
+                                    ? (String) from.get("username")
+                                    : "";
+                            if (!TelegramBotAccess.isSenderAllowed(
+                                    effectiveGroupAllow, senderId, senderUsername)) {
+                                log.debug("Blocked group sender {} (group allowFrom override)",
+                                        senderId);
+                                return;
+                            }
+                        }
+
+                        // 3. Group policy (open / disabled / allowlist)
+                        String groupPolicy = firstDefinedString(
+                                topicConfig != null ? (String) topicConfig.get("groupPolicy") : null,
+                                groupConfig != null ? (String) groupConfig.get("groupPolicy") : null,
+                                tgConfig != null ? (String) tgConfig.get("groupPolicy") : null,
+                                "open");
+
+                        if ("disabled".equals(groupPolicy)) {
+                            log.debug("Blocked group message (groupPolicy: disabled)");
+                            return;
+                        }
+                        if ("allowlist".equals(groupPolicy)) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> from = message.get("from") instanceof Map
+                                    ? (Map<String, Object>) message.get("from")
+                                    : null;
+                            String senderId = from != null ? String.valueOf(from.get("id")) : null;
+                            if (senderId == null) {
+                                log.debug("Blocked group message (no sender, groupPolicy: allowlist)");
+                                return;
+                            }
+                            if (!effectiveGroupAllow.hasEntries()) {
+                                log.debug("Blocked group message (groupPolicy: allowlist, no entries)");
+                                return;
+                            }
+                            String senderUsername = from != null
+                                    ? (String) from.get("username")
+                                    : "";
+                            if (!TelegramBotAccess.isSenderAllowed(
+                                    effectiveGroupAllow, senderId, senderUsername)) {
+                                log.debug("Blocked group sender {} (groupPolicy: allowlist)",
+                                        senderId);
+                                return;
+                            }
+                        }
+
+                        // 4. Group ID allowlist check
+                        String resolvedPolicy = resolveGroupPolicy(latestConfig, chatId);
+                        if ("allowlist".equals(resolvedPolicy)) {
+                            // The group itself must be in the configured groups
+                            if (groupConfig == null) {
+                                log.debug("Blocked group {} (not in group allowlist)", chatId);
+                                return;
+                            }
+                        }
+                    }
+
                     // Build context and dispatch
                     var msgCtx = TelegramBotMessageContext.buildMessageContext(
                             message, media,
                             TelegramBotHelpers.resolveAllowFrom(
                                     TelegramBotHelpers.resolveTelegramAccountConfig(
-                                            ctx.getConfig(), accountId)),
+                                            latestConfig, accountId)),
                             Map.of("botUsername", ctx.getBotUsername() != null ? ctx.getBotUsername() : "",
                                     "requireMention", ctx.getOptions().isRequireMention()),
-                            ctx.getConfig(), accountId);
+                            latestConfig, accountId);
                     if (msgCtx != null) {
                         TelegramBotMessageDispatch.dispatch(
-                                msgCtx, ctx.getConfig(), accountId,
+                                msgCtx, latestConfig, accountId,
                                 ctx.getOptions().getReplyToMode(),
                                 TelegramBotHelpers.resolveTelegramStreamMode(
-                                        ctx.getConfig(), accountId),
+                                        latestConfig, accountId),
                                 4096,
                                 ctx.getOptions().getToken());
                     }

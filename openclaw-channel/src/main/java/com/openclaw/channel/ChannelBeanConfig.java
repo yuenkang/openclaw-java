@@ -125,6 +125,9 @@ public class ChannelBeanConfig {
         try {
             telegramContext = TelegramChannelPlugin.initialize(config);
             if (telegramContext != null) {
+                // Wire config supplier for per-message config reload (picks up runtime
+                // overrides)
+                telegramContext.setConfigSupplier(configService::loadConfig);
                 TelegramChannelPlugin.start(telegramContext);
             }
         } catch (Exception e) {

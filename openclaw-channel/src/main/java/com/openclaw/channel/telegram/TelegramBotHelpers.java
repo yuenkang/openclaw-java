@@ -164,6 +164,16 @@ public class TelegramBotHelpers {
     }
 
     /**
+     * Resolve the forum thread ID from explicit isForum flag and messageThreadId.
+     * Matches TS: resolveTelegramForumThreadId({ isForum, messageThreadId }).
+     */
+    public static Integer resolveForumThreadId(boolean isForum, Integer messageThreadId) {
+        if (!isForum || messageThreadId == null)
+            return null;
+        return messageThreadId;
+    }
+
+    /**
      * Check if a message has a bot mention in its entities.
      */
     public static boolean hasBotMention(Map<String, Object> message, String botUsername) {

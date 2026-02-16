@@ -72,7 +72,7 @@ public class TelegramBotDelivery {
     public static void deliverReply(
             String token, String chatId, String text,
             String replyToMessageId, Integer messageThreadId,
-            String replyToMode, Map<String, Object> inlineKeyboard) {
+            String replyToMode, String replyMarkup) {
 
         if (text == null || text.isBlank())
             return;
@@ -86,7 +86,8 @@ public class TelegramBotDelivery {
 
         for (int i = 0; i < htmlChunks.size(); i++) {
             String replyId = (i == 0) ? replyToMessageId : null;
-            Map<String, Object> keyboard = (i == htmlChunks.size() - 1) ? inlineKeyboard : null;
+            // Only attach keyboard to the last chunk
+            String keyboard = (i == htmlChunks.size() - 1) ? replyMarkup : null;
             TelegramSend.sendMessage(token, chatId, htmlChunks.get(i),
                     replyId, messageThreadId, replyToMode, keyboard);
         }

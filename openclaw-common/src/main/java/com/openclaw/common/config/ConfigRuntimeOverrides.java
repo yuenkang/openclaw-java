@@ -15,6 +15,24 @@ public final class ConfigRuntimeOverrides {
     // Mutable override tree
     private static volatile Map<String, Object> overrides = new LinkedHashMap<>();
 
+    // Optional listener for cache invalidation (set by ConfigService at startup)
+    private static volatile Runnable onOverrideChanged = null;
+
+    /**
+     * Register a callback to be invoked when overrides change.
+     * Typically called by ConfigService to invalidate its cache.
+     */
+    public static void setOnOverrideChanged(Runnable listener) {
+        onOverrideChanged = listener;
+    }
+
+    private static void notifyChanged() {
+        Runnable listener = onOverrideChanged;
+        if (listener != null) {
+            listener.run();
+        }
+    }
+
     // =========================================================================
     // Types
     // =========================================================================
@@ -41,6 +59,7 @@ public final class ConfigRuntimeOverrides {
      */
     public static void resetConfigOverrides() {
         overrides = new LinkedHashMap<>();
+        notifyChanged();
     }
 
     /**
@@ -52,6 +71,7 @@ public final class ConfigRuntimeOverrides {
             return new SetResult(false, parsed.error() != null ? parsed.error() : "Invalid path.");
         }
         ConfigPaths.setConfigValueAtPath(overrides, parsed.path(), value);
+        notifyChanged();
         return new SetResult(true, null);
     }
 
@@ -65,6 +85,9 @@ public final class ConfigRuntimeOverrides {
                     parsed.error() != null ? parsed.error() : "Invalid path.");
         }
         boolean removed = ConfigPaths.unsetConfigValueAtPath(overrides, parsed.path());
+        if (removed) {
+            notifyChanged();
+        }
         return new UnsetResult(true, removed, null);
     }
 

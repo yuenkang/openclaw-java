@@ -57,14 +57,35 @@ public class TelegramBotMessageDispatch {
     private static volatile ReplyPipeline replyPipeline;
     private static volatile AgentInvoker agentInvoker;
     private static volatile CommandHandler commandHandler;
+    private static volatile CallbackQueryHandler callbackQueryHandler;
+
+    /**
+     * Result of a command handler — text + optional inline keyboard buttons.
+     */
+    public record CommandHandlerResult(
+            String text,
+            List<List<TelegramSend.InlineButton>> buttons) {
+
+        public boolean hasButtons() {
+            return buttons != null && !buttons.isEmpty();
+        }
+    }
 
     /**
      * Command handler — intercepts slash commands before the reply pipeline.
-     * Returns a reply string if the command was handled, null otherwise.
+     * Returns a CommandHandlerResult if the command was handled, null otherwise.
      */
     @FunctionalInterface
     public interface CommandHandler {
-        String handle(String command, String sessionKey, OpenClawConfig config);
+        CommandHandlerResult handle(String command, String sessionKey, String senderId, OpenClawConfig config);
+    }
+
+    /**
+     * Callback query handler — handles inline button presses (e.g. pagination).
+     */
+    @FunctionalInterface
+    public interface CallbackQueryHandler {
+        CommandHandlerResult handle(String callbackData, OpenClawConfig config);
     }
 
     /** Set the full reply pipeline. Preferred over setAgentInvoker. */
@@ -80,6 +101,11 @@ public class TelegramBotMessageDispatch {
     /** Set the command handler for slash commands (e.g. /clear, /usage). */
     public static void setCommandHandler(CommandHandler handler) {
         commandHandler = handler;
+    }
+
+    /** Set the callback query handler for inline button presses. */
+    public static void setCallbackQueryHandler(CallbackQueryHandler handler) {
+        callbackQueryHandler = handler;
     }
 
     // =========================================================================
@@ -202,18 +228,67 @@ public class TelegramBotMessageDispatch {
         // Send typing action while processing
         sendTyping(token, chatId);
 
-        // Intercept slash commands before the reply pipeline
+        // Intercept Telegram-specific /start command
         String text = context.getText() != null ? context.getText().trim() : "";
+        if (text.equals("/start") || text.startsWith("/start ")) {
+            String welcomeText = """
+                    🤖 *欢迎使用 OpenClaw！*
+
+                    我是你的 AI 助手，可以直接对话，也可以使用斜杠命令。
+
+                    *快速开始*
+                    • 直接发送消息与 AI 对话
+                    • /help — 查看帮助信息
+                    • /commands — 列出所有可用命令
+                    • /status — 查看当前状态
+                    • /model — 查看或切换模型
+
+                    发送任意消息，开始对话吧！ 💬""";
+            deliverReply(token, chatId, welcomeText,
+                    messageId, replyToMode, messageThreadId, textLimit);
+            return;
+        }
+
+        // DM access check (matches TS buildTelegramMessageContext L224-303)
+        // For DMs: check allowFrom + ownerAllowFrom. If not allowed, block.
+        // /start is exempt (handled above).
+        // Group messages bypass this check (group policy logic is separate).
+        if (!context.isGroup()) {
+            var tgConfig = TelegramBotHelpers.resolveTelegramAccountConfig(config, accountId);
+            List<String> allowFrom = tgConfig != null
+                    ? TelegramBotHelpers.resolveAllowFrom(tgConfig)
+                    : List.of();
+            List<String> ownerAllowFrom = List.of();
+            if (config.getCommands() != null && config.getCommands().getOwnerAllowFrom() != null) {
+                ownerAllowFrom = config.getCommands().getOwnerAllowFrom().stream()
+                        .map(String::valueOf).toList();
+            }
+            var normalized = TelegramBotAccess.normalizeAllowFromWithStore(allowFrom, ownerAllowFrom);
+            boolean allowed = TelegramBotAccess.isSenderAllowed(
+                    normalized, context.getSenderId(), context.getSenderUsername());
+            if (!allowed) {
+                log.info("DM from non-allowlisted sender {} — blocked", context.getSenderId());
+                return;
+            }
+        }
+
+        // Intercept slash commands before the reply pipeline
         if (commandHandler != null && text.startsWith("/")) {
-            String cmdReply = null;
+            CommandHandlerResult cmdResult = null;
             try {
-                cmdReply = commandHandler.handle(text, sessionKey, config);
+                cmdResult = commandHandler.handle(text, sessionKey, context.getSenderId(), config);
             } catch (Exception e) {
                 log.error("Command handler failed: {}", e.getMessage(), e);
             }
-            if (cmdReply != null) {
-                deliverReply(token, chatId, cmdReply,
-                        messageId, replyToMode, messageThreadId, textLimit);
+            if (cmdResult != null) {
+                if (cmdResult.hasButtons()) {
+                    // Send with inline keyboard
+                    sendMessageWithButtons(token, chatId, cmdResult.text(),
+                            cmdResult.buttons(), messageId, messageThreadId, replyToMode);
+                } else {
+                    deliverReply(token, chatId, cmdResult.text(),
+                            messageId, replyToMode, messageThreadId, textLimit);
+                }
                 return;
             }
         }
@@ -315,6 +390,104 @@ public class TelegramBotMessageDispatch {
                             messageId, replyToMode, messageThreadId, textLimit);
                     return null;
                 });
+    }
+
+    // =========================================================================
+    // Callback query handling (inline button presses)
+    // =========================================================================
+
+    /**
+     * Handle a Telegram callback query (inline button press).
+     * Returns true if the callback was handled.
+     */
+    public static boolean handleCallbackQuery(
+            String token, String chatId, Integer messageId,
+            String callbackData, OpenClawConfig config) {
+
+        if (callbackQueryHandler == null || callbackData == null) {
+            return false;
+        }
+
+        try {
+            CommandHandlerResult result = callbackQueryHandler.handle(callbackData, config);
+            if (result == null) {
+                return false;
+            }
+
+            // Convert markdown to Telegram HTML
+            String html = com.openclaw.channel.telegram.TelegramFormat
+                    .markdownToTelegramHtml(result.text(), null);
+
+            // Serialize inline keyboard if present
+            String replyMarkup = result.hasButtons()
+                    ? serializeInlineKeyboard(result.buttons())
+                    : null;
+
+            TelegramSend.editMessage(token, chatId, messageId, html, replyMarkup);
+            return true;
+        } catch (Exception e) {
+            log.error("Callback query handling failed: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    // =========================================================================
+    // Send with inline keyboard
+    // =========================================================================
+
+    /**
+     * Send a message with inline keyboard buttons.
+     */
+    private static void sendMessageWithButtons(
+            String token, String chatId, String text,
+            List<List<TelegramSend.InlineButton>> buttons,
+            String replyToMessageId, Integer messageThreadId,
+            String replyToMode) {
+
+        // Convert markdown to Telegram HTML
+        String html = TelegramFormat.markdownToTelegramHtml(text, null);
+
+        String replyMarkup = serializeInlineKeyboard(buttons);
+        TelegramSend.sendMessage(token, chatId, html, replyToMessageId,
+                messageThreadId, replyToMode, replyMarkup);
+    }
+
+    /**
+     * Serialize inline keyboard buttons to JSON for Telegram API reply_markup.
+     */
+    static String serializeInlineKeyboard(List<List<TelegramSend.InlineButton>> buttons) {
+        if (buttons == null || buttons.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"inline_keyboard\":[");
+        for (int r = 0; r < buttons.size(); r++) {
+            if (r > 0)
+                sb.append(",");
+            sb.append("[");
+            List<TelegramSend.InlineButton> row = buttons.get(r);
+            for (int c = 0; c < row.size(); c++) {
+                if (c > 0)
+                    sb.append(",");
+                TelegramSend.InlineButton btn = row.get(c);
+                sb.append("{\"text\":\"").append(escapeJson(btn.text()))
+                        .append("\",\"callback_data\":\"")
+                        .append(escapeJson(btn.callbackData()))
+                        .append("\"}");
+            }
+            sb.append("]");
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    private static String escapeJson(String value) {
+        if (value == null)
+            return "";
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
     }
 
     // =========================================================================

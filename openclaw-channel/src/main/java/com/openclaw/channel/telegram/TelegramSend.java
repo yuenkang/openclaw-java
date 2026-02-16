@@ -148,15 +148,17 @@ public final class TelegramSend {
 
     /**
      * Send a text message with optional inline keyboard.
+     *
+     * @param replyMarkup pre-serialized JSON for reply_markup (nullable)
      */
     public static String sendMessage(String token, String chatId, String text,
             String replyToMessageId, Integer messageThreadId,
-            String replyToMode, Map<String, Object> inlineKeyboard) {
+            String replyToMode, String replyMarkup) {
 
         StringBuilder json = new StringBuilder("{");
         json.append("\"chat_id\":\"").append(escapeJson(chatId)).append("\"");
         json.append(",\"text\":\"").append(escapeJson(text)).append("\"");
-        json.append(",\"parse_mode\":\"Markdown\"");
+        json.append(",\"parse_mode\":\"HTML\"");
 
         if (replyToMessageId != null && !replyToMessageId.isBlank()) {
             json.append(",\"reply_to_message_id\":").append(replyToMessageId);
@@ -164,9 +166,20 @@ public final class TelegramSend {
         if (messageThreadId != null) {
             json.append(",\"message_thread_id\":").append(messageThreadId);
         }
+        if (replyMarkup != null && !replyMarkup.isBlank()) {
+            json.append(",\"reply_markup\":").append(replyMarkup);
+        }
         json.append("}");
 
-        return TelegramFetch.callApi(token, "sendMessage", json.toString());
+        String result = TelegramFetch.callApi(token, "sendMessage", json.toString());
+
+        // Fallback: if HTML parse failed, retry without parse_mode
+        if (result != null && isParseError(result)) {
+            String fallbackJson = json.toString().replace(",\"parse_mode\":\"HTML\"", "");
+            result = TelegramFetch.callApi(token, "sendMessage", fallbackJson);
+        }
+
+        return result;
     }
 
     /**
@@ -174,12 +187,25 @@ public final class TelegramSend {
      */
     public static String editMessage(String token, String chatId,
             Integer messageId, String text) {
+        return editMessage(token, chatId, messageId, text, null);
+    }
+
+    /**
+     * Edit an existing message with optional reply_markup.
+     *
+     * @param replyMarkup pre-serialized JSON for reply_markup (nullable)
+     */
+    public static String editMessage(String token, String chatId,
+            Integer messageId, String text, String replyMarkup) {
 
         StringBuilder json = new StringBuilder("{");
         json.append("\"chat_id\":\"").append(escapeJson(chatId)).append("\"");
         json.append(",\"message_id\":").append(messageId);
         json.append(",\"text\":\"").append(escapeJson(text)).append("\"");
-        json.append(",\"parse_mode\":\"Markdown\"");
+        json.append(",\"parse_mode\":\"HTML\"");
+        if (replyMarkup != null && !replyMarkup.isBlank()) {
+            json.append(",\"reply_markup\":").append(replyMarkup);
+        }
         json.append("}");
 
         return TelegramFetch.callApi(token, "editMessageText", json.toString());
@@ -204,7 +230,7 @@ public final class TelegramSend {
         fields.put("chat_id", chatId);
         if (caption != null && !caption.isBlank()) {
             fields.put("caption", caption);
-            fields.put("parse_mode", "Markdown");
+            fields.put("parse_mode", "HTML");
         }
         if (replyToMessageId != null && !replyToMessageId.isBlank()) {
             fields.put("reply_to_message_id", replyToMessageId);

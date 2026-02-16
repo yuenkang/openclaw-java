@@ -148,7 +148,7 @@ public final class MarkdownParser {
         } else if (node instanceof BulletListItem || node instanceof OrderedListItem) {
             state.appendListPrefix();
             renderNode(node, state);
-
+            state.append("\n");
         } else if (node instanceof FencedCodeBlock fcb) {
             String code = fcb.getContentChars().toString();
             if (!code.endsWith("\n"))
