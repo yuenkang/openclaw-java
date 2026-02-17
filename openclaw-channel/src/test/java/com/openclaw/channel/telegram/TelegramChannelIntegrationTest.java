@@ -119,8 +119,10 @@ class TelegramChannelIntegrationTest {
         }
 
         @Test
-        void handleTextMessage_deniedSenderNotProcessed() {
-            // Restrict access to specific user
+        void handleTextMessage_passesAllMessagesToProcessCallback() {
+            // Access control is handled in TelegramBotMessageDispatch.dispatch(),
+            // NOT in handleTextMessage. The handler should pass all messages through
+            // to the processMessage callback regardless of the sender.
             var channels = new OpenClawConfig.ChannelsConfig();
             Map<String, Object> providers = new HashMap<>();
             Map<String, Object> tgCfg = new HashMap<>();
@@ -138,10 +140,10 @@ class TelegramChannelIntegrationTest {
                     .processMessage((msg, media) -> processedMessages.add(msg))
                     .build();
 
-            // "denieduser" is not in allow list
+            // handleTextMessage does not check access — it always processes
             TelegramBotHandlers.handleTextMessage(restrictedParams,
-                    buildTextUpdate(2001, 99, "denieduser", "Blocked"));
-            assertTrue(processedMessages.isEmpty());
+                    buildTextUpdate(2001, 99, "anyuser", "Hello"));
+            assertEquals(1, processedMessages.size());
         }
 
         @Test

@@ -1,5 +1,47 @@
 # Changelog
 
+## Phase 38 — 端到端功能验证 · 测试修复 · Infra 补全 (2026-02-17)
+
+### Verified — 编译 & 测试
+
+- `mvn clean compile` 0 error ✅
+- `mvn test` **341 / 341** pass ✅
+  - `openclaw-common` 117 / 117 (+42 new)
+  - `openclaw-agent` 35 / 35
+  - `openclaw-channel` 159 / 159
+  - `openclaw-gateway` 8 / 8
+  - `openclaw-app` 22 / 22
+
+### Fixed — 过时测试
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `TelegramChannelIntegrationTest` | [FIX] `handleTextMessage_deniedSenderNotProcessed` → `handleTextMessage_passesAllMessagesToProcessCallback` — Phase 37 将访问控制从 `handleTextMessage` 移至 `dispatch()`，测试需同步更新 |
+
+### Added — Infra 补全 (openclaw-common)
+
+TS `infra/` 覆盖率 16→24 文件, 20%→30%
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `DedupeCache` | [NEW] `infra/dedupe.ts` | TTL + max-size 去重缓存，线程安全 |
+| `OsSummary` | [NEW] `infra/os-summary.ts` | 平台/架构/版本检测 |
+| `SsrfGuard` | [NEW] `infra/net/ssrf.ts` | SSRF 防护 — 私有 IP/hostname 检测 |
+| `FetchGuard` | [NEW] `infra/net/fetch-guard.ts` | HTTP fetch + SSRF 校验 + 手动重定向跟踪 |
+| `GatewayLock` | [NEW] `infra/gateway-lock.ts` | OS 文件锁保证 Gateway 单实例运行 |
+| `ExecApprovals` | [NEW] `infra/exec-approvals.ts` | 命令执行白名单管理 |
+| `HeartbeatRunner` | [NEW] `infra/heartbeat-runner.ts` | 可配置心跳调度器 |
+| `FormatAge` | [NEW] `channel-summary.ts#formatAge` | 人类可读的时间格式化 |
+
+### Reviewed — 功能对齐
+
+| 子系统 | Java 文件 | TS 文件 | 覆盖率 |
+|--------|-----------|---------|--------|
+| `auto-reply/` | 120 | 121 | **~99%** ✅ |
+| `infra/` | 24 | ~100 | **~30%** ↑ |
+
+---
+
 ## Phase 37 — 命令系统重构 · 访问控制 · 配置热加载 (2026-02-17)
 
 ### Refactored — 命令系统 (openclaw-app)
