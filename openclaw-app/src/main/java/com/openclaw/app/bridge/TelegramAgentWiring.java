@@ -2,6 +2,8 @@ package com.openclaw.app.bridge;
 
 import com.openclaw.app.commands.CommandProcessor;
 import com.openclaw.agent.autoreply.reply.GetReply;
+import com.openclaw.agent.hooks.BundledHookHandlers;
+import com.openclaw.agent.hooks.InternalHookRegistry;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.runtime.AgentRunner;
@@ -61,7 +63,11 @@ public class TelegramAgentWiring {
             ConfigService configService,
             CommandProcessor commandProcessor) {
         this.chatAgentBridge = chatAgentBridge;
-        this.agentRunner = new AgentRunner(modelProviderRegistry, toolRegistry);
+        // Create hook registry and register bundled hooks (soul-evil, boot-md, etc.)
+        InternalHookRegistry hookRegistry = new InternalHookRegistry();
+        BundledHookHandlers.registerAll(hookRegistry);
+        this.agentRunner = new AgentRunner(modelProviderRegistry, toolRegistry, 25,
+                hookRegistry, null);
         this.toolRegistry = toolRegistry;
         this.configService = configService;
         this.modelProviderRegistry = modelProviderRegistry;

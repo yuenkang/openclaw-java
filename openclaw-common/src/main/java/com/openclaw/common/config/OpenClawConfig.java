@@ -1375,6 +1375,24 @@ public class OpenClawConfig {
         private List<HookMappingConfig> mappings;
         private HooksGmailConfig gmail;
         private InternalHooksConfig internal;
+        /** Dynamic hook-specific config (e.g. soul-evil, custom hooks). */
+        private Map<String, Object> hookEntries;
+
+        @JsonAnySetter
+        public void addHookEntry(String key, Object value) {
+            // Skip known typed fields
+            if (List.of("enabled", "path", "token", "maxBodyBytes", "presets",
+                    "transformsDir", "mappings", "gmail", "internal").contains(key))
+                return;
+            if (hookEntries == null)
+                hookEntries = new HashMap<>();
+            hookEntries.put(key, value);
+        }
+
+        @JsonAnyGetter
+        public Map<String, Object> getHookEntries() {
+            return hookEntries;
+        }
     }
 
     @Data

@@ -1,7 +1,11 @@
 package com.openclaw.agent.hooks;
 
+import com.openclaw.common.config.OpenClawConfig;
 import lombok.extern.slf4j.Slf4j;
 
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,9 +24,10 @@ public class BundledHookHandlers {
      */
     public static void registerAll(InternalHookRegistry registry) {
         registerBootMdHook(registry);
+        registerSoulEvilHook(registry);
         registerCommandLoggerHook(registry);
         registerSessionMemoryHook(registry);
-        log.info("Registered {} bundled hook handlers", 3);
+        log.info("Registered {} bundled hook handlers", 4);
     }
 
     // =========================================================================
@@ -39,6 +44,80 @@ public class BundledHookHandlers {
             log.debug("[boot-md] Agent bootstrap in workspace: {}", workspaceDir);
             // Actual HOOK.md reading is done by the agent prompt builder
         });
+    }
+
+    // =========================================================================
+    // soul-evil: Override SOUL.md with SOUL_EVIL.md based on probability/schedule
+    // =========================================================================
+
+    @SuppressWarnings("unchecked")
+    private static void registerSoulEvilHook(InternalHookRegistry registry) {
+        registry.register("agent:bootstrap", event -> {
+            Map<String, Object> ctx = event.getContext();
+            if (ctx == null)
+                return;
+
+            String workspaceDir = (String) ctx.get("workspaceDir");
+            Object configObj = ctx.get("config");
+            Object filesObj = ctx.get("bootstrapFiles");
+            if (workspaceDir == null || filesObj == null)
+                return;
+
+            // Skip subagent sessions
+            String sessionKey = event.getSessionKey();
+            if (sessionKey != null && sessionKey.contains(":sub:"))
+                return;
+
+            // Resolve soul-evil config from OpenClawConfig
+            Map<String, Object> hookConfig = null;
+            if (configObj instanceof OpenClawConfig cfg) {
+                hookConfig = resolveSoulEvilHookConfig(cfg);
+            }
+            if (hookConfig == null)
+                return;
+
+            Object enabledVal = hookConfig.get("enabled");
+            if (enabledVal != null && Boolean.FALSE.equals(enabledVal))
+                return;
+
+            SoulEvil.SoulEvilConfig soulConfig = SoulEvil.resolveSoulEvilConfig(hookConfig);
+            if (soulConfig == null)
+                return;
+
+            List<SoulEvil.BootstrapFile> files = (List<SoulEvil.BootstrapFile>) filesObj;
+
+            // Resolve user timezone from config
+            String userTimezone = null;
+            if (configObj instanceof OpenClawConfig cfg
+                    && cfg.getAgents() != null
+                    && cfg.getAgents().getDefaults() != null) {
+                userTimezone = cfg.getAgents().getDefaults().getUserTimezone();
+            }
+
+            List<SoulEvil.BootstrapFile> updated = SoulEvil.applySoulEvilOverride(
+                    files, Path.of(workspaceDir), soulConfig, userTimezone,
+                    Instant.now(), Math::random);
+
+            // Replace bootstrapFiles in context with updated list
+            ctx.put("bootstrapFiles", updated);
+        });
+    }
+
+    /**
+     * Extract hooks.soul-evil config from OpenClawConfig.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resolveSoulEvilHookConfig(OpenClawConfig config) {
+        if (config.getHooks() == null)
+            return null;
+        Map<String, Object> entries = config.getHooks().getHookEntries();
+        if (entries == null)
+            return null;
+        Object soulEvil = entries.get("soul-evil");
+        if (soulEvil instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
+        return null;
     }
 
     // =========================================================================

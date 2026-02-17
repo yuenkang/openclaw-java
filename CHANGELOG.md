@@ -1,16 +1,68 @@
 # Changelog
 
+## Phase 39 — Hooks 补全 · 未使用代码接入 · 代码去重 (2026-02-18)
+
+### Verified — 编译 & 测试
+
+- `mvn clean compile` 0 error ✅
+- `mvn test` **434 / 434** pass ✅
+
+### Added — HookFrontmatter (openclaw-agent)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `HookFrontmatter` | [NEW] `hooks/frontmatter.ts` | HOOK.md frontmatter 解析 → 结构化 metadata/invocation policy |
+| `HookFrontmatterTest` | [新测试] | 22 个测试 — frontmatter 解析/metadata/invocation/hookKey/normalizeStringList |
+
+### Refactored — 消除重复代码
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `HookLoader` | 移除内联 `parseFrontmatter()` + `parseMetadata()`，改用 `HookFrontmatter` |
+| `WorkspaceHooks` | 移除内联 `parseFrontmatter()` + `resolveMetadata()`，改用 `HookFrontmatter` |
+
+调用链：`MarkdownFrontmatter` → `HookFrontmatter` → `HookLoader` / `WorkspaceHooks`
+
+### Added — 未使用代码接入
+
+| Java 文件 | 接入位置 | 说明 |
+|-----------|---------|------|
+| `BootstrapResolver` | `AgentRunner.executeLoop()` | 替换硬编码 bootstrap 逻辑，增加 50KB maxChars 截断保护 |
+| `ThinkingFallback` | `AgentRunner` LLM 错误处理 | thinking level 降级诊断 |
+| `WebSearchTool` | `OpenClawToolFactory.createTools()` | 网页搜索工具（SearXNG/Tavily/Brave） |
+
+### Wired — SoulEvil 接入 Agent 启动流程
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `BundledHookHandlers` | 注册 `agent:bootstrap` 事件处理 soul-evil hook |
+| `AgentRunner` | 触发 bootstrap 事件、加载 .openclaw/ 文件、注入 system prompt |
+| `AgentMethodRegistrar` | 调用 `BundledHookHandlers.registerAll()` |
+| `TelegramAgentWiring` | 调用 `BundledHookHandlers.registerAll()` |
+| `OpenClawConfig.HooksConfig` | 支持 `@JsonAnySetter` 动态 hook 配置 |
+
+---
+
 ## Phase 38 — 端到端功能验证 · 测试修复 · Infra 补全 (2026-02-17)
 
 ### Verified — 编译 & 测试
 
 - `mvn clean compile` 0 error ✅
-- `mvn test` **370 / 370** pass ✅
+- `mvn test` **412 / 412** pass ✅
   - `openclaw-common` 146 / 146 (+71 new)
-  - `openclaw-agent` 35 / 35
+  - `openclaw-agent` 77 / 77 (+42 new)
   - `openclaw-channel` 159 / 159
   - `openclaw-gateway` 8 / 8
   - `openclaw-app` 22 / 22
+
+### Added — Hooks 补全 (openclaw-agent)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `SoulEvil` | [NEW] `hooks/soul-evil.ts` | 人格覆盖（概率 + 定时窗口） |
+| `InternalHookRegistryTest` | [新测试] | 注册/触发/注销/异常隔离 |
+| `HookConfigTest` | [新测试] | isTruthy/hasBinary/shouldInclude |
+| `SoulEvilTest` | [新测试] | 决策/purge 窗口/时间解析 |
 
 ### Fixed — 过时测试
 

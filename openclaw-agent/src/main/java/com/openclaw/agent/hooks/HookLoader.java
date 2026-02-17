@@ -121,7 +121,7 @@ public class HookLoader {
     private HookTypes.HookEntry parseHookEntry(Path hookMdPath, HookTypes.HookSource source) {
         try {
             String content = Files.readString(hookMdPath);
-            Map<String, String> frontmatter = parseFrontmatter(content);
+            Map<String, String> frontmatter = HookFrontmatter.parseFrontmatter(content);
 
             Path baseDir = hookMdPath.getParent();
             String name = baseDir != null ? baseDir.getFileName().toString() : "unknown";
@@ -133,7 +133,18 @@ public class HookLoader {
                     : null;
 
             // Parse metadata from frontmatter
-            HookTypes.HookMetadata metadata = parseMetadata(frontmatter);
+            // Use HookFrontmatter for structured metadata resolution
+            HookTypes.HookMetadata metadata = HookFrontmatter.resolveOpenClawMetadata(frontmatter);
+            if (metadata == null) {
+                // Fallback: parse basic frontmatter fields directly
+                metadata = HookTypes.HookMetadata.builder()
+                        .events(HookFrontmatter.normalizeStringList(frontmatter.get("events")))
+                        .always("true".equalsIgnoreCase(frontmatter.get("always")))
+                        .hookKey(frontmatter.get("hookKey"))
+                        .emoji(frontmatter.get("emoji"))
+                        .homepage(frontmatter.get("homepage"))
+                        .build();
+            }
 
             HookTypes.Hook hook = HookTypes.Hook.builder()
                     .name(name)
@@ -144,9 +155,7 @@ public class HookLoader {
                     .handlerPath(handlerPath)
                     .build();
 
-            HookTypes.HookInvocationPolicy invocation = HookTypes.HookInvocationPolicy.builder()
-                    .enabled(!"false".equalsIgnoreCase(frontmatter.get("enabled")))
-                    .build();
+            HookTypes.HookInvocationPolicy invocation = HookFrontmatter.resolveHookInvocationPolicy(frontmatter);
 
             return HookTypes.HookEntry.builder()
                     .hook(hook)
@@ -160,58 +169,8 @@ public class HookLoader {
         }
     }
 
-    /**
-     * Parse simple YAML-like frontmatter from a Markdown file.
-     * Supports the --- delimited block at the top of the file.
-     */
-    static Map<String, String> parseFrontmatter(String content) {
-        Map<String, String> result = new LinkedHashMap<>();
-        if (content == null || !content.startsWith("---"))
-            return result;
-
-        int endIdx = content.indexOf("---", 3);
-        if (endIdx < 0)
-            return result;
-
-        String block = content.substring(3, endIdx).trim();
-        for (String line : block.split("\n")) {
-            int colonIdx = line.indexOf(':');
-            if (colonIdx > 0) {
-                String key = line.substring(0, colonIdx).trim();
-                String value = line.substring(colonIdx + 1).trim();
-                // Strip surrounding quotes
-                if (value.length() >= 2 &&
-                        ((value.startsWith("\"") && value.endsWith("\"")) ||
-                                (value.startsWith("'") && value.endsWith("'")))) {
-                    value = value.substring(1, value.length() - 1);
-                }
-                result.put(key, value);
-            }
-        }
-        return result;
-    }
-
-    private HookTypes.HookMetadata parseMetadata(Map<String, String> frontmatter) {
-        String eventsStr = frontmatter.get("events");
-        List<String> events = new ArrayList<>();
-        if (eventsStr != null && !eventsStr.isBlank()) {
-            // Support comma-separated and JSON-like arrays
-            String cleaned = eventsStr.replaceAll("[\\[\\]\"]", "");
-            for (String e : cleaned.split(",")) {
-                String trimmed = e.trim();
-                if (!trimmed.isEmpty())
-                    events.add(trimmed);
-            }
-        }
-
-        return HookTypes.HookMetadata.builder()
-                .events(events)
-                .always("true".equalsIgnoreCase(frontmatter.get("always")))
-                .hookKey(frontmatter.get("hookKey"))
-                .emoji(frontmatter.get("emoji"))
-                .homepage(frontmatter.get("homepage"))
-                .build();
-    }
+    // parseFrontmatter and parseMetadata are now delegated to HookFrontmatter
+    // which in turn uses MarkdownFrontmatter from openclaw-common.
 
     /**
      * Create a HookHandler that executes a shell script.

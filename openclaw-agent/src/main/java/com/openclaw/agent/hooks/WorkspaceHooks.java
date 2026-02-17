@@ -41,7 +41,7 @@ public class WorkspaceHooks {
 
                 try {
                     String content = Files.readString(hookMdPath);
-                    Map<String, String> frontmatter = parseFrontmatter(content);
+                    Map<String, String> frontmatter = HookFrontmatter.parseFrontmatter(content);
                     String name = frontmatter.getOrDefault("name",
                             hookDir.getFileName().toString());
                     String description = frontmatter.getOrDefault("description", "");
@@ -72,10 +72,18 @@ public class WorkspaceHooks {
                             .handlerPath(handlerPath)
                             .build();
 
-                    HookTypes.HookMetadata metadata = resolveMetadata(frontmatter);
-                    HookTypes.HookInvocationPolicy invocation = HookTypes.HookInvocationPolicy.builder()
-                            .enabled(true)
-                            .build();
+                    // Use HookFrontmatter for metadata + invocation policy
+                    HookTypes.HookMetadata metadata = HookFrontmatter.resolveOpenClawMetadata(frontmatter);
+                    if (metadata == null) {
+                        metadata = HookTypes.HookMetadata.builder()
+                                .events(HookFrontmatter.normalizeStringList(frontmatter.get("events")))
+                                .always("true".equalsIgnoreCase(frontmatter.get("always")))
+                                .hookKey(frontmatter.get("hookKey"))
+                                .emoji(frontmatter.get("emoji"))
+                                .build();
+                    }
+                    HookTypes.HookInvocationPolicy invocation = HookFrontmatter
+                            .resolveHookInvocationPolicy(frontmatter);
 
                     entries.add(HookTypes.HookEntry.builder()
                             .hook(hook)
@@ -189,55 +197,8 @@ public class WorkspaceHooks {
                 .build();
     }
 
-    // --- Private helpers ---
-
-    /**
-     * Simple frontmatter parser for HOOK.md files.
-     * Extracts YAML-like key: value pairs between --- delimiters.
-     */
-    private static Map<String, String> parseFrontmatter(String content) {
-        Map<String, String> result = new LinkedHashMap<>();
-        if (content == null || !content.startsWith("---"))
-            return result;
-
-        int endIdx = content.indexOf("---", 3);
-        if (endIdx < 0)
-            return result;
-
-        String frontmatter = content.substring(3, endIdx).trim();
-        for (String line : frontmatter.split("\n")) {
-            int colonIdx = line.indexOf(':');
-            if (colonIdx > 0) {
-                String key = line.substring(0, colonIdx).trim();
-                String value = line.substring(colonIdx + 1).trim();
-                result.put(key, value);
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Resolve hook metadata from frontmatter.
-     */
-    private static HookTypes.HookMetadata resolveMetadata(Map<String, String> frontmatter) {
-        HookTypes.HookMetadata.HookMetadataBuilder builder = HookTypes.HookMetadata.builder();
-
-        if (frontmatter.containsKey("always")) {
-            builder.always("true".equalsIgnoreCase(frontmatter.get("always")));
-        }
-        if (frontmatter.containsKey("hookKey")) {
-            builder.hookKey(frontmatter.get("hookKey"));
-        }
-        if (frontmatter.containsKey("emoji")) {
-            builder.emoji(frontmatter.get("emoji"));
-        }
-        if (frontmatter.containsKey("events")) {
-            String eventsStr = frontmatter.get("events");
-            builder.events(Arrays.asList(eventsStr.split(",\\s*")));
-        }
-
-        return builder.build();
-    }
+    // parseFrontmatter and resolveMetadata are now delegated to HookFrontmatter
+    // which in turn uses MarkdownFrontmatter from openclaw-common.
 
     private static String resolveDefaultManagedDir() {
         String home = System.getProperty("user.home");

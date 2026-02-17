@@ -3,6 +3,7 @@ package com.openclaw.agent.runtime;
 import com.openclaw.agent.hooks.InternalHookRegistry;
 import com.openclaw.agent.hooks.InternalHookRegistry.HookEvent;
 import com.openclaw.agent.hooks.InternalHookRegistry.HookEventType;
+import com.openclaw.agent.hooks.SoulEvil;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.prompt.SystemPromptBuilder;
@@ -173,6 +174,57 @@ public class AgentRunner {
                             "modelId", context.getModelId() != null ? context.getModelId() : "")));
         }
 
+        // --- Hook: agent bootstrap (loads workspace files, allows hooks to modify
+        // them) ---
+        String bootstrapContent = null;
+        if (context.getCwd() != null) {
+            // Use BootstrapResolver to load .openclaw/ files with maxChars protection
+            List<BootstrapResolver.BootstrapFile> bsFiles = BootstrapResolver
+                    .loadWorkspaceBootstrapFiles(context.getCwd());
+
+            // If hooks are available, convert to SoulEvil.BootstrapFile for hook compat
+            if (hookRegistry != null && !bsFiles.isEmpty()) {
+                List<SoulEvil.BootstrapFile> hookFiles = new java.util.ArrayList<>(bsFiles.stream()
+                        .map(f -> SoulEvil.BootstrapFile.builder()
+                                .name(f.relativePath()).content(f.content()).missing(f.content() == null)
+                                .build())
+                        .toList());
+
+                Map<String, Object> bootstrapCtx = new java.util.HashMap<>();
+                bootstrapCtx.put("workspaceDir", context.getCwd());
+                bootstrapCtx.put("config", context.getConfig());
+                bootstrapCtx.put("bootstrapFiles", hookFiles);
+                bootstrapCtx.put("sessionKey", context.getSessionKey());
+
+                hookRegistry.trigger(new HookEvent(
+                        HookEventType.AGENT, "bootstrap",
+                        context.getSessionKey(), bootstrapCtx));
+
+                // Hooks may have modified bootstrapFiles (e.g. soul-evil replaces SOUL.md)
+                @SuppressWarnings("unchecked")
+                List<SoulEvil.BootstrapFile> finalFiles = (List<SoulEvil.BootstrapFile>) bootstrapCtx
+                        .get("bootstrapFiles");
+
+                // Convert back to BootstrapResolver.BootstrapFile for context building
+                bsFiles = finalFiles.stream()
+                        .map(f -> new BootstrapResolver.BootstrapFile(
+                                f.getName(), f.getContent(), f.isMissing()))
+                        .toList();
+            }
+
+            // Build context with maxChars truncation protection
+            List<BootstrapResolver.EmbeddedContextFile> contextFiles = BootstrapResolver
+                    .buildBootstrapContextFiles(bsFiles, 50_000);
+
+            if (!contextFiles.isEmpty()) {
+                StringBuilder bsb = new StringBuilder();
+                for (var cf : contextFiles) {
+                    bsb.append("\n\n## ").append(cf.path()).append("\n").append(cf.content().trim());
+                }
+                bootstrapContent = bsb.toString();
+            }
+        }
+
         // Build tool-aware system prompt (always include tool definitions)
         String skillsPrompt = null;
         if (context.getConfig() != null) {
@@ -198,6 +250,11 @@ public class AgentRunner {
             context.setSystemPrompt(context.getSystemPrompt() + "\n\n" + autoPrompt);
         } else {
             context.setSystemPrompt(autoPrompt);
+        }
+
+        // Inject bootstrap content (SOUL.md, AGENTS.md, etc.) into system prompt
+        if (bootstrapContent != null) {
+            context.setSystemPrompt(context.getSystemPrompt() + "\n" + bootstrapContent);
         }
 
         List<AgentEvent> events = new ArrayList<>();
@@ -265,6 +322,15 @@ public class AgentRunner {
                 // Classify error for failover / user messaging
                 String rawError = e.getMessage() != null ? e.getMessage() : e.toString();
                 ErrorClassifier.FailoverReason reason = ErrorClassifier.classifyFailoverReason(rawError);
+
+                // Check if the error is thinking-level related (e.g. unsupported thinking
+                // level)
+                String fallbackLevel = ThinkingFallback.pickFallbackThinkingLevel(
+                        rawError, Set.of());
+                if (fallbackLevel != null) {
+                    log.warn("Thinking level rejected by API. Suggested fallback: '{}'", fallbackLevel);
+                }
+
                 String errorMsg = String.format("LLM call failed [%s]: %s", reason.name(), rawError);
                 return AgentResult.builder()
                         .success(false)

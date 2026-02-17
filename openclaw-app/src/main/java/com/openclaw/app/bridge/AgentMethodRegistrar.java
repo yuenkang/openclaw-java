@@ -1,6 +1,7 @@
 package com.openclaw.app.bridge;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.openclaw.agent.hooks.BundledHookHandlers;
 import com.openclaw.agent.hooks.InternalHookRegistry;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
@@ -45,8 +46,9 @@ public class AgentMethodRegistrar {
         this.sessionStore = sessionStore;
         this.configService = configService;
 
-        // Create application-level hook registry
+        // Create application-level hook registry and register bundled hooks
         this.hookRegistry = new InternalHookRegistry();
+        BundledHookHandlers.registerAll(this.hookRegistry);
 
         // Create subagent registry with persistence
         String stateDir = System.getProperty("user.dir") + "/.openclaw";

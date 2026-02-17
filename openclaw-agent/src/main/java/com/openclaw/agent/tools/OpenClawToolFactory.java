@@ -78,6 +78,9 @@ public class OpenClawToolFactory {
                 // --- Web Fetch ---
                 tools.add(new WebFetchTool());
 
+                // --- Web Search ---
+                tools.add(new WebSearchTool());
+
                 // --- Image ---
                 tools.add(new ImageTool(options.getModelProviderRegistry()));
 
