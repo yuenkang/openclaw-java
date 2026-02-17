@@ -72,7 +72,7 @@ export ANTHROPIC_BASE_URL=https://your-proxy.example.com/v1
 mvn spring-boot:run -pl openclaw-app
 ```
 
-服务启动在 `ws://127.0.0.1:18789/ws`
+服务启动在 `ws://127.0.0.1:18789`
 
 ### 环境变量
 
