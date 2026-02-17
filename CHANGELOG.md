@@ -1,5 +1,87 @@
 # Changelog
 
+## Phase 42 — 入口类接入主流程 (2026-02-18)
+
+### Verified — 编译 & 测试
+
+- `mvn compile` 0 error ✅
+- `mvn test` **121 / 121** pass (openclaw-agent) ✅
+
+### Added — PluginBootstrap (openclaw-app)
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `PluginBootstrap` | 应用级 Spring Bean — 启动时全局加载插件，channel 无关 |
+
+### Changed — AgentRunner media-understanding 集成 (openclaw-agent)
+
+- `AgentRunner.run()` — 新增 media-understanding 中间件，处理 `mediaAttachments` 后再构建用户消息
+- `AgentRunContext` — 新增 `mediaAttachments` 字段，channel 层只传数据不处理
+
+### Changed — HookInstall 校验接入 (openclaw-agent)
+
+- `BundledHookHandlers.registerBootMdHook()` — agent bootstrap 时校验 hooksDir 目录
+
+### Refactored — 解除 channel 绑定
+
+- `TelegramAgentWiring` — 移除 PluginLoader/MediaApply 直接调用，仅构建 `MediaAttachment` 传递给 `AgentRunContext`
+- `AgentMethodRegistrar` — 移除 PluginLoader 直接调用
+
+## Phase 41 — Media-Understanding 扩展 (2026-02-18)
+
+### Verified — 编译 & 测试
+
+- `mvn compile` 0 error ✅
+- `mvn test` **121 / 121** pass (openclaw-agent) ✅
+
+### Added — Batch 4: Media-Understanding 框架 (openclaw-agent)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `MediaTypes` | `media-understanding/types.ts` | 枚举 (MediaKind/Capability/DecisionOutcome)、Attachment/Output/Decision 数据类 |
+| `MediaScope` | `media-understanding/scope.ts` | per-channel/session scope 规则 (allow/deny) |
+| `MediaFormat` | `media-understanding/format.ts` | 输出格式化、placeholder 清理、音频转录拼接 |
+| `MediaResolver` | `media-understanding/resolve.ts` | 超时/prompt/maxChars/maxBytes 解析、model entry 过滤 |
+| `MediaProvider` | `media-understanding/providers/index.ts` | Provider SPI 注册中心 + capability registry |
+| `MediaRunner` | `media-understanding/runner.ts` | 并发 attachment 处理、model entry fallback chain |
+| `MediaApply` | `media-understanding/apply.ts` | 全流程编排: scope→filter→resolve→run→aggregate |
+
+## Phase 40 — Hooks 收尾 · Plugins 基础框架 (2026-02-18)
+
+### Verified — 编译 & 测试
+
+- `mvn compile` 0 error ✅
+- `mvn test` **121 / 121** pass (openclaw-agent) ✅
+
+### Added — Batch 2: Hooks 收尾 (openclaw-agent)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `HookInstall` | `hooks/install.ts` + `installs.ts` | hook 安装验证、目录解析、path-traversal 防护、安装记录 |
+| `HookInstallTest` | [新测试] | 14 测试 — ID 验证/安全目录/hook 目录校验/安装记录 |
+| `HookStatusTest` | [新测试] | 6 测试 — 简单/禁用/缺失依赖/always/OS/插件 hooks |
+
+### Changed — HookStatus eligibility (openclaw-agent)
+
+- `HookStatus.buildEntryStatus` — 补全 bins/OS/env/config 实际 eligibility 检查
+
+### Added — Batch 3: Plugins 基础框架 (openclaw-agent)
+
+| Java 文件 | TS 源 | 说明 |
+|-----------|-------|------|
+| `PluginTypes` | `plugins/types.ts` | PluginKind/PluginOrigin/PluginApi/注册类型 |
+| `PluginManifest` | `plugins/manifest.ts` | openclaw.plugin.json 解析 (sealed interface result) |
+| `PluginRegistry` | `plugins/registry.ts` | 线程安全注册中心 (ConcurrentHashMap) |
+| `PluginConfigState` | `plugins/config-state.ts` | 配置归一化/enable-state/memory slot 决策 |
+| `PluginDiscovery` | `plugins/discovery.ts` | workspace/user/extra 目录扫描 |
+| `PluginLoader` | `plugins/loader.ts` | 全流程: 发现→manifest→enable→注册 |
+
+### Fixed — Lint 清理
+
+- 移除未使用 imports (`HookInstall`, `HookStatusTest`, `PluginTypes`, `PluginConfigState`)
+- 移除不必要的 `@SuppressWarnings` (`PluginLoader`, `PluginConfigState`)
+- 修复未使用变量 (`BundledHookHandlers.registerSessionMemoryHook`)
+
 ## Phase 39 — Hooks 补全 · 未使用代码接入 · 代码去重 (2026-02-18)
 
 ### Verified — 编译 & 测试

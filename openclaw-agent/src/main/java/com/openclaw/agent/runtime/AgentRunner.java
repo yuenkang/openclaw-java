@@ -3,6 +3,9 @@ package com.openclaw.agent.runtime;
 import com.openclaw.agent.hooks.InternalHookRegistry;
 import com.openclaw.agent.hooks.InternalHookRegistry.HookEvent;
 import com.openclaw.agent.hooks.InternalHookRegistry.HookEventType;
+import com.openclaw.agent.media.MediaApply;
+import com.openclaw.agent.media.MediaFormat;
+import com.openclaw.agent.media.MediaTypes;
 import com.openclaw.agent.hooks.SoulEvil;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
@@ -107,6 +110,29 @@ public class AgentRunner {
      */
     public AgentResult run(AgentRunContext context) {
         try {
+            // --- Apply media-understanding for non-image attachments ---
+            if (context.getMediaAttachments() != null && !context.getMediaAttachments().isEmpty()) {
+                try {
+                    MediaTypes.ApplyResult muResult = MediaApply.apply(
+                            context.getMediaAttachments(), null,
+                            context.getSessionKey(), null, null,
+                            List.of());
+                    if (!muResult.getOutputs().isEmpty()) {
+                        String formatted = MediaFormat.formatMediaUnderstandingBody(
+                                context.getUserMessage(), muResult.getOutputs());
+                        if (formatted != null && !formatted.isBlank()) {
+                            context.setUserMessage(formatted);
+                        }
+                    }
+                    log.debug("Media understanding applied: image={} audio={} video={}",
+                            muResult.isAppliedImage(), muResult.isAppliedAudio(),
+                            muResult.isAppliedVideo());
+                } catch (Exception e) {
+                    log.warn("Media understanding failed, using original message: {}",
+                            e.getMessage());
+                }
+            }
+
             // If userMessage is set or imageContentParts are present, prepend as user
             // message
             boolean hasText = context.getUserMessage() != null && !context.getUserMessage().isBlank();
@@ -526,6 +552,8 @@ public class AgentRunner {
         private String userMessage;
         /** Multimodal content parts for user message (text + images). */
         private List<ModelProvider.ContentPart> imageContentParts;
+        /** Media attachments for media-understanding processing (audio/video). */
+        private List<MediaTypes.MediaAttachment> mediaAttachments;
         private List<ModelProvider.ChatMessage> messages;
         private String cwd;
         private int maxTokens;

@@ -43,6 +43,17 @@ public class BundledHookHandlers {
             // Boot-md hook: reads HOOK.md instructions and appends to agent context
             log.debug("[boot-md] Agent bootstrap in workspace: {}", workspaceDir);
             // Actual HOOK.md reading is done by the agent prompt builder
+
+            // Validate hooks directory if configured
+            String hooksDir = (String) event.getContext().get("hooksDir");
+            if (hooksDir != null && !hooksDir.isBlank()) {
+                List<String> errors = HookInstall.validateHookDir(hooksDir);
+                if (!errors.isEmpty()) {
+                    log.warn("[boot-md] Hook directory validation errors: {}", errors);
+                } else {
+                    log.debug("[boot-md] Hook directory validated: {}", hooksDir);
+                }
+            }
         });
     }
 
@@ -142,7 +153,6 @@ public class BundledHookHandlers {
     private static void registerSessionMemoryHook(InternalHookRegistry registry) {
         registry.register("session:end", event -> {
             String sessionKey = event.getSessionKey();
-            Map<String, Object> context = event.getContext();
 
             log.debug("[session-memory] Session ended: session={}", sessionKey);
             // Memory persistence is handled by the session store

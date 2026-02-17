@@ -131,16 +131,56 @@ public final class HookStatus {
             reqOs = meta.getOs();
         }
 
-        // Simplified: assume all local requirements satisfied for now
-        MissingRequirements missing = MissingRequirements.builder()
-                .bins(List.of())
-                .anyBins(List.of())
-                .env(List.of())
-                .config(List.of())
-                .os(List.of())
-                .build();
+        // Compute missing requirements using HookConfig
+        List<String> missingBins = reqBins.stream()
+                .filter(bin -> !HookConfig.hasBinary(bin))
+                .toList();
 
-        boolean eligible = !disabled && (always || true /* simplified: all reqs met */);
+        List<String> missingAnyBins = List.of();
+        if (!reqAnyBins.isEmpty() && reqAnyBins.stream().noneMatch(HookConfig::hasBinary)) {
+            missingAnyBins = reqAnyBins;
+        }
+
+        String platform = HookConfig.resolveRuntimePlatform();
+        List<String> missingOs = (!reqOs.isEmpty() && !reqOs.contains(platform))
+                ? reqOs
+                : List.of();
+
+        // Check environment variables (hook config env overrides system env)
+        var hookCfg = HookConfig.resolveHookConfig(config, hookKey);
+        List<String> missingEnv = new ArrayList<>();
+        for (String envName : reqEnv) {
+            if (System.getenv(envName) != null)
+                continue;
+            if (hookCfg != null && hookCfg.containsKey("env")
+                    && hookCfg.get("env") instanceof java.util.Map<?, ?> envMap
+                    && envMap.get(envName) != null)
+                continue;
+            missingEnv.add(envName);
+        }
+
+        // Check config paths
+        List<String> missingConfig = reqConfig.stream()
+                .filter(path -> !HookConfig.isConfigPathTruthy(config, path))
+                .toList();
+
+        MissingRequirements missing;
+        if (always) {
+            missing = MissingRequirements.builder()
+                    .bins(List.of()).anyBins(List.of())
+                    .env(List.of()).config(List.of()).os(List.of())
+                    .build();
+        } else {
+            missing = MissingRequirements.builder()
+                    .bins(missingBins).anyBins(missingAnyBins)
+                    .env(missingEnv).config(missingConfig).os(missingOs)
+                    .build();
+        }
+
+        boolean eligible = !disabled && (always
+                || (missingBins.isEmpty() && missingAnyBins.isEmpty()
+                        && missingEnv.isEmpty() && missingConfig.isEmpty()
+                        && missingOs.isEmpty()));
 
         return HookStatusEntry.builder()
                 .name(hook.getName())

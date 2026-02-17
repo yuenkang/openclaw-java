@@ -4,6 +4,7 @@ import com.openclaw.app.commands.CommandProcessor;
 import com.openclaw.agent.autoreply.reply.GetReply;
 import com.openclaw.agent.hooks.BundledHookHandlers;
 import com.openclaw.agent.hooks.InternalHookRegistry;
+import com.openclaw.agent.media.MediaTypes;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.runtime.AgentRunner;
@@ -173,11 +174,20 @@ public class TelegramAgentWiring {
 
         // --- Build image content parts if media is attached ---
         List<ModelProvider.ContentPart> imageContentParts = null;
-        if (mediaInfo != null && mediaInfo.get("mediaType") != null
-                && mediaInfo.get("mediaType").startsWith("image/")) {
-            imageContentParts = buildImageContentParts(
-                    userMessage, mediaInfo.get("mediaFileId"),
-                    mediaInfo.get("mediaType"), mediaInfo.get("botToken"));
+        List<MediaTypes.MediaAttachment> mediaAttachments = null;
+        if (mediaInfo != null && mediaInfo.get("mediaType") != null) {
+            if (mediaInfo.get("mediaType").startsWith("image/")) {
+                imageContentParts = buildImageContentParts(
+                        userMessage, mediaInfo.get("mediaFileId"),
+                        mediaInfo.get("mediaType"), mediaInfo.get("botToken"));
+            } else {
+                // Non-image media → pass as mediaAttachments for AgentRunner to process
+                mediaAttachments = List.of(MediaTypes.MediaAttachment.builder()
+                        .path(mediaInfo.get("mediaFileId"))
+                        .mime(mediaInfo.get("mediaType"))
+                        .index(0)
+                        .build());
+            }
         }
 
         AgentRunner.AgentRunContext.AgentRunContextBuilder ctxBuilder = AgentRunner.AgentRunContext.builder()
@@ -192,6 +202,9 @@ public class TelegramAgentWiring {
 
         if (imageContentParts != null) {
             ctxBuilder.imageContentParts(imageContentParts);
+        }
+        if (mediaAttachments != null) {
+            ctxBuilder.mediaAttachments(mediaAttachments);
         }
 
         AgentRunner.AgentRunContext context = ctxBuilder.build();
