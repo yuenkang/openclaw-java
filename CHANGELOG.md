@@ -5,8 +5,8 @@
 ### Verified — 编译 & 测试
 
 - `mvn clean compile` 0 error ✅
-- `mvn test` **341 / 341** pass ✅
-  - `openclaw-common` 117 / 117 (+42 new)
+- `mvn test` **361 / 361** pass ✅
+  - `openclaw-common` 137 / 137 (+62 new)
   - `openclaw-agent` 35 / 35
   - `openclaw-channel` 159 / 159
   - `openclaw-gateway` 8 / 8
@@ -20,7 +20,7 @@
 
 ### Added — Infra 补全 (openclaw-common)
 
-TS `infra/` 覆盖率 16→24 文件, 20%→30%
+TS `infra/` 覆盖率 16→29 文件, 20%→35%
 
 | Java 文件 | TS 源 | 说明 |
 |-----------|-------|------|
@@ -32,13 +32,18 @@ TS `infra/` 覆盖率 16→24 文件, 20%→30%
 | `ExecApprovals` | [NEW] `infra/exec-approvals.ts` | 命令执行白名单管理 |
 | `HeartbeatRunner` | [NEW] `infra/heartbeat-runner.ts` | 可配置心跳调度器 |
 | `FormatAge` | [NEW] `channel-summary.ts#formatAge` | 人类可读的时间格式化 |
+| `DeviceIdentity` | [NEW] `infra/device-identity.ts` | Ed25519 密钥对身份 + 签名验证 |
+| `MachineDisplayName` | [NEW] `infra/machine-name.ts` | 机器可读名称（macOS scutil） |
+| `GitCommit` | [NEW] `infra/git-commit.ts` | Git commit hash 解析 |
+| `Archive` | [NEW] `infra/archive.ts` | zip/tar 压缩包解压（含 zip-slip 防护） |
+| `SystemPresence` | [NEW] `infra/system-presence.ts` | 多节点在线状态追踪 |
 
 ### Reviewed — 功能对齐
 
 | 子系统 | Java 文件 | TS 文件 | 覆盖率 |
 |--------|-----------|---------|--------|
 | `auto-reply/` | 120 | 121 | **~99%** ✅ |
-| `infra/` | 24 | ~100 | **~30%** ↑ |
+| `infra/` | 29 | ~100 | **~35%** ↑ |
 
 ---
 
