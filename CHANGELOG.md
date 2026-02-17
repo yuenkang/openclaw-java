@@ -5,8 +5,8 @@
 ### Verified — 编译 & 测试
 
 - `mvn clean compile` 0 error ✅
-- `mvn test` **361 / 361** pass ✅
-  - `openclaw-common` 137 / 137 (+62 new)
+- `mvn test` **370 / 370** pass ✅
+  - `openclaw-common` 146 / 146 (+71 new)
   - `openclaw-agent` 35 / 35
   - `openclaw-channel` 159 / 159
   - `openclaw-gateway` 8 / 8
@@ -20,7 +20,7 @@
 
 ### Added — Infra 补全 (openclaw-common)
 
-TS `infra/` 覆盖率 16→29 文件, 20%→35%
+TS `infra/` 覆盖率 16→31 文件, 20%→38%
 
 | Java 文件 | TS 源 | 说明 |
 |-----------|-------|------|
@@ -37,13 +37,15 @@ TS `infra/` 覆盖率 16→29 文件, 20%→35%
 | `GitCommit` | [NEW] `infra/git-commit.ts` | Git commit hash 解析 |
 | `Archive` | [NEW] `infra/archive.ts` | zip/tar 压缩包解压（含 zip-slip 防护） |
 | `SystemPresence` | [NEW] `infra/system-presence.ts` | 多节点在线状态追踪 |
+| `ExecHost` | [NEW] `infra/exec-host.ts` | HMAC 认证远程命令执行 |
+| `HeartbeatVisibility` | [NEW] `infra/heartbeat-visibility.ts` | 心跳可见性分层配置 |
 
 ### Reviewed — 功能对齐
 
 | 子系统 | Java 文件 | TS 文件 | 覆盖率 |
 |--------|-----------|---------|--------|
 | `auto-reply/` | 120 | 121 | **~99%** ✅ |
-| `infra/` | 29 | ~100 | **~35%** ↑ |
+| `infra/` | 31 | ~100 | **~38%** ↑ |
 
 ---
 
