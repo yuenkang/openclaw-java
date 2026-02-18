@@ -1,23 +1,25 @@
 # Java vs TypeScript 版本进度对比
 
-> 更新时间: 2026-02-17
+> 更新时间: 2026-02-19
 
 ## 总览
 
-| 指标     | TypeScript  | Java     | 覆盖率 |
-| -------- | ----------- | -------- | ------ |
-| 源文件数 | 2,236       | 654      | **29%** |
-| 代码行数 | ~397,000    | ~99,000  | **25%** |
+| 指标       | TypeScript  | Java       | 覆盖率 |
+| ---------- | ----------- | ---------- | ------ |
+| 源文件数 | 2,236       | 703        | **31%** |
+| 代码行数 | ~397,000    | ~108,000   | **27%** |
+| 测试文件 | —           | 56         | —      |
+| 测试用例 | —           | 612        | —      |
 
 ## 按子系统对比
 
 | TS 子系统               | TS 文件/行      | Java 对应                              | 状态                         |
 | ----------------------- | --------------- | -------------------------------------- | ---------------------------- |
-| `agents/`               | 231 / 45,734    | `openclaw-agent` 338 文件              | ✅ **核心已实现**            |
-| `commands/`             | 174 / 28,414    | `openclaw-app/commands` 15+ 文件       | ⚠️ 框架+主要命令             |
+| `agents/`               | 231 / 45,734    | `openclaw-agent` 354 文件              | ✅ **核心已实现**            |
+| `commands/`             | 174 / 28,414    | `openclaw-app/commands` 15+ 文件      | ✅ 框架+主要命令 + /doctor /status |
 | `gateway/`              | 133 / 25,951    | `openclaw-gateway` 117 文件            | ✅ **基本对齐**              |
 | `auto-reply/`           | 121 / 22,150    | `openclaw-agent/directive`             | ⚠️ 部分实现                  |
-| `infra/`                | 117 / 22,805    | `openclaw-common/infra` 16 文件        | ⚠️ 核心已移植，覆盖约 15%    |
+| `infra/`                | 117 / 22,805    | `openclaw-common/infra` 16 文件        | ⚠️ 核心 16 模块已移植，接入主流程 |
 | `cli/`                  | 138 / 21,161    | —                                      | ❌ **未实现**                |
 | `config/`               | 89 / 14,188     | `openclaw-common/config`               | ✅ **基本对齐**              |
 | `browser/`              | 52 / 10,478     | `BrowserTool` + `BrowserControlServer` | ⚠️ 核心 API 已实现           |
@@ -47,11 +49,15 @@
 
 ### ✅ 核心功能 (已完成)
 
-Agent 执行引擎、多模型 Provider、工具链、配置系统、Telegram Bot、网关 WebSocket、Markdown 渲染、日志脱敏、安全审计
+Agent 执行引擎、多模型 Provider、工具链、配置系统、Telegram Bot、网关 WebSocket、Markdown 渲染、日志脱敏、安全审计、infra 基础设施 (16 模块)
 
 ### ⚠️ 部分实现
 
-命令系统 (TS 174 文件 vs Java 15)、infra (TS 117 vs Java 16)、浏览器控制、Discord、Memory、Hooks、Cron、Plugins
+命令系统 (TS 174 文件 vs Java 15+)、浏览器控制、Discord、Memory、Hooks、Cron、Plugins
+
+### ✔️ 测试覆盖
+
+56 个测试文件、612 个测试用例，覆盖 common/gateway/agent/channel/app 全部 5 个模块
 
 ### ❌ 未覆盖
 
@@ -59,4 +65,4 @@ CLI (138 文件)、Slack/Signal/Line/iMessage/WhatsApp 渠道、Web UI、Daemon 
 
 ---
 
-> Java 版本在**核心 Agent 引擎 + Telegram 渠道**上功能已相当完整，但 TS 版本在**渠道多样性** (7 个 vs 2 个)、**CLI 工具链**、**Web UI**、**媒体理解**等方面有大量 Java 尚未覆盖的内容。按代码量看大约完成了 25%，按核心功能完整度看估计在 **50-60%** 左右。
+> Java 版本在**核心 Agent 引擎 + Telegram 渠道**上功能已相当完整，但 TS 版本在**渠道多样性** (7 个 vs 2 个)、**CLI 工具链**、**Web UI**、**媒体理解**等方面有大量 Java 尚未覆盖的内容。按代码量看大约完成了 27%，按核心功能完整度看估计在 **55-65%** 左右。

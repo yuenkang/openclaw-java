@@ -35,16 +35,16 @@ OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gatewa
 ## 模块说明
 
 
-| 模块               | 文件数 | 说明                                                                                                                |
-| ------------------ | ------ | ------------------------------------------------------------------------------------------------------------------- |
-| `openclaw-common`  | 65     | 配置管理 (90+ 嵌套类型)、日志脱敏、安全审计、Markdown IR 解析/渲染、基础设施 (重试/事件/运行时)                     |
-| `openclaw-gateway` | 117    | WebSocket 服务器、会话管理、方法路由、Cron 调度、出站消息投递、运行时重载、OpenAI 兼容 HTTP                         |
-| `openclaw-agent`   | 338    | Agent 执行引擎、多模型提供者 (Anthropic/OpenAI/Ollama)、内置工具 (Exec/File/Browser/Image)、指令处理、Hooks、Memory |
-| `openclaw-channel` | 104    | Telegram Bot (18+ 文件) + 微信公众号 (8 文件) + Discord 适配器、渠道注册、消息投递、出站适配器                      |
-| `openclaw-plugin`  | 5      | SPI 插件加载器、注册中心、清单解析                                                                                  |
-| `openclaw-app`     | 25     | Spring Boot 入口、命令系统 (15 个命令模块)、模块桥接、OpenAI 兼容 REST API、浏览器控制                              |
+| 模块               | 源文件 | 测试文件 | 说明                                                                                                                |
+| ------------------ | ------ | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `openclaw-common`  | 94     | 24       | 配置管理 (90+ 嵌套类型)、日志脱敏、安全审计、Markdown IR 解析/渲染、基础设施 (infra 16 模块)                       |
+| `openclaw-gateway` | 117    | 4        | WebSocket 服务器、会话管理、方法路由、Cron 调度、出站消息投递、运行时重载、OpenAI 兼容 HTTP                         |
+| `openclaw-agent`   | 354    | 12       | Agent 执行引擎、多模型提供者 (Anthropic/OpenAI/Ollama)、内置工具 (Exec/File/Browser/Image)、指令处理、Hooks、Memory |
+| `openclaw-channel` | 104    | 9        | Telegram Bot (18+ 文件) + 微信公众号 (8 文件) + Discord 适配器、渠道注册、消息投递、出站适配器                      |
+| `openclaw-plugin`  | 5      | 0        | SPI 插件加载器、注册中心、清单解析                                                                                  |
+| `openclaw-app`     | 29     | 7        | Spring Boot 入口、命令系统 (15 个命令模块)、模块桥接、OpenAI 兼容 REST API、浏览器控制                              |
 
-**总计**: 654 个 Java 源文件，22 个测试文件
+**总计**: 703 个 Java 源文件 (~108k 行)，56 个测试文件 (~8k 行)，612 个测试用例
 
 ## 快速开始
 
@@ -124,17 +124,18 @@ mvn test
 - **Memory 系统**: 记忆索引、关键字搜索、后端配置
 - **Reasoning**: 支持 `reasoning_content` 流式/非流式解析 (Claude extended thinking)
 
-### 命令系统 (`openclaw-app/commands`) 🆕
+### 命令系统 (`openclaw-app/commands`)
 
-独立的 channel-agnostic 命令系统 (15 个命令模块):
+独立的 channel-agnostic 命令系统 (15+ 个命令模块):
 
 - **会话管理**: `/clear` 清除历史、`/usage` 用量统计
 - **模型切换**: `/model` 切换模型、`/models` 分页模型列表 (inline keyboard)
-- **信息查询**: `/help` `/status` `/commands`
+- **信息查询**: `/help` `/status` `/status all` `/commands`
+- **诊断工具**: `/doctor` 环境诊断 (配置/端口/二进制依赖/更新检查)
 - **访问控制**: `/allowlist` 白名单管理 (addme/removeme/list/add/remove)
 - **配置管理**: `/config` 运行时配置查看/修改 (支持嵌套路径)
 - **高级功能**: `/bash` Shell命令、`/subagent` 子Agent管理、`/tools` 工具列表、`/tts` 语音合成、`/plugins` 插件列表
-- **操作审批**: `/approve` 危险操作批准
+- **操作审批**: `/approve` 危险操作批准、`/restart` 重启服务
 
 ### 日志 · 安全 · Markdown (`openclaw-common`) 🆕
 
@@ -334,6 +335,11 @@ openclaw-java/
 | 35.1   | TUI 修复 (流式/token/模型名/session) + TUI 文档        | 10     |
 | 36     | 日志脱敏 · 安全审计 · Markdown IR · Providers 扩展  | 34     |
 | 37     | 命令系统重构 · 访问控制对齐 · 配置热加载 · 群组策略 | 25     |
+| 38–42 | Telegram 完善 · WeChat · 端到端测试 · 编译修复       | ~30    |
+| 43     | infra/ 补齐 (16 模块: dotenv/binaries/restart 等)    | 16     |
+| 43.5   | InfraBootstrap 接入主流程                            | 3      |
+| 44     | 命令系统深化 (/status /doctor /restart 接入 infra)   | 4      |
+| 45     | 测试覆盖率提升 (9 新测试文件, 612 pass)              | 9      |
 
 ## License
 
