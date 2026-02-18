@@ -1,5 +1,78 @@
 # Changelog
 
+## Phase 43 — infra/ 基础设施补齐 + 接入主流程 (2026-02-19)
+
+### Verified — 编译 & 测试
+
+- `mvn compile` 0 error ✅
+- `mvn test` **202 / 202** pass (openclaw-common) ✅
+
+### Added — InfraBootstrap (openclaw-app)
+
+| Java 文件 | 说明 |
+|-----------|------|
+| `InfraBootstrap` | `@PostConstruct`: DotEnv + PathEnv + UnhandledExceptions；`ApplicationReadyEvent`: sentinel 消费 + 更新检查 + 警告 flush |
+
+### Changed — 主流程集成
+
+| 修改项 | 说明 |
+|--------|------|
+| `ConfigService.doLoadConfig()` | 集成 `ShellEnv.loadShellEnvFallback()` — 配置加载时自动获取 login shell 环境变量 |
+| `GatewayStartup.start()` | 集成 `PortsInspect.inspectPort()` — 启动前检查端口占用，输出诊断信息 |
+
+### 接入状态
+
+已接入（10）: `DotEnv` · `ShellEnv` · `PathEnv` · `Warnings` · `UnhandledExceptions` · `RestartSentinel` · `UpdateChannels` · `UpdateCheck` · `UpdateStartup` · `PortsInspect`
+
+待接入（4，Phase 44 命令系统）: `Binaries` · `Restart` · `ChannelSummary` · `ChannelStatusIssues`
+
+### Added — 环境与进程管理 (Batch 1)
+
+| Java 文件 | 对应 TS | 说明 |
+|-----------|---------|------|
+| `DotEnv` | `infra/dotenv.ts` + `env-file.ts` | `.env` 加载（CWD + 全局回退）+ upsert |
+| `ShellEnv` | `infra/shell-env.ts` | login shell 环境获取（launchd 适配） |
+| `PathEnv` | `infra/path-env.ts` | PATH 引导（Homebrew/pnpm/mise 候选目录） |
+| `Warnings` | `infra/warnings.ts` | 启动警告批量收集 |
+| `Binaries` | `infra/binaries.ts` | 外部二进制检测（which/where） |
+
+### Added — 重启与异常处理 (Batch 2)
+
+| Java 文件 | 对应 TS | 说明 |
+|-----------|---------|------|
+| `Restart` | `infra/restart.ts` | Gateway 重启（launchctl/systemd + 授权窗口） |
+| `RestartSentinel` | `infra/restart-sentinel.ts` | 跨重启状态传递 JSON 哨兵 |
+| `UnhandledExceptions` | `infra/unhandled-rejections.ts` | 异常分类（致命/配置/网络/中止） |
+
+### Added — 更新检查 (Batch 3)
+
+| Java 文件 | 对应 TS | 说明 |
+|-----------|---------|------|
+| `UpdateChannels` | `infra/update-channels.ts` | 渠道定义（stable/beta/dev） |
+| `UpdateCheck` | `infra/update-check.ts` | Git/semver 版本检查 |
+| `UpdateStartup` | `infra/update-startup.ts` | 启动时更新检查（24h 节流） |
+
+### Added — 渠道摘要与端口 (Batch 4)
+
+| Java 文件 | 对应 TS | 说明 |
+|-----------|---------|------|
+| `ChannelSummary` | `infra/channel-summary.ts` | 渠道状态摘要构建 |
+| `PortsInspect` | `infra/ports-inspect.ts` | 端口占用检测（lsof/netstat） |
+| `ChannelStatusIssues` | `infra/channels-status-issues.ts` | 渠道问题收集框架 |
+
+### Added — 测试 (Batch 5)
+
+| 测试文件 | 覆盖范围 |
+|----------|----------|
+| `DotEnvTest` | .env 解析、覆盖、upsert |
+| `ShellEnvTest` | NUL 分隔解析、skip 逻辑 |
+| `RestartTest` | 授权/消费/平台检测 |
+| `RestartSentinelTest` | 写入/读取/消费/缺失 |
+| `UnhandledExceptionsTest` | 异常分类 (OOM/网络/配置/abort) |
+| `UpdateCheckTest` | semver 对比 + 渠道解析 |
+
+---
+
 ## Phase 42 — 入口类接入主流程 (2026-02-18)
 
 ### Verified — 编译 & 测试

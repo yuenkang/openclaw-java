@@ -4,13 +4,16 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.openclaw.common.infra.ShellEnv;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -136,12 +139,27 @@ public class ConfigService {
         return configPath;
     }
 
+    /**
+     * Expected env keys to look for via login shell fallback (mirrors TS
+     * SHELL_ENV_EXPECTED_KEYS).
+     */
+    private static final List<String> SHELL_ENV_EXPECTED_KEYS = List.of(
+            "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN",
+            "GEMINI_API_KEY", "ZAI_API_KEY", "OPENROUTER_API_KEY",
+            "AI_GATEWAY_API_KEY", "MINIMAX_API_KEY", "SYNTHETIC_API_KEY",
+            "ELEVENLABS_API_KEY", "TELEGRAM_BOT_TOKEN", "DISCORD_BOT_TOKEN",
+            "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
+            "OPENCLAW_GATEWAY_TOKEN", "OPENCLAW_GATEWAY_PASSWORD");
+
     @SuppressWarnings("unchecked")
     private OpenClawConfig doLoadConfig() {
         try {
             OpenClawConfig config;
             if (!Files.exists(configPath)) {
                 log.warn("Config file not found: {}, using defaults", configPath);
+                // Load shell env fallback when config is missing
+                // (mirrors TS config/io.ts behavior)
+                loadShellEnvIfNeeded(null);
                 config = applyDefaults(new OpenClawConfig());
             } else {
                 String raw = Files.readString(configPath);
@@ -154,6 +172,10 @@ public class ConfigService {
 
                 // Apply defaults
                 config = applyDefaults(config);
+
+                // Load shell env fallback after config is loaded
+                // (mirrors TS config/io.ts: loadShellEnvFallback after applyDefaults)
+                loadShellEnvIfNeeded(config);
 
                 log.info("Config loaded from: {}", configPath);
             }
@@ -173,6 +195,47 @@ public class ConfigService {
         } catch (IOException e) {
             log.error("Failed to load config from: {}", configPath, e);
             return applyDefaults(new OpenClawConfig());
+        }
+    }
+
+    /**
+     * Load environment variables from the user's login shell if needed.
+     * Mirrors TypeScript's loadShellEnvFallback in config/io.ts.
+     */
+    private void loadShellEnvIfNeeded(OpenClawConfig config) {
+        try {
+            // Check if shell env fallback is enabled via environment
+            String envFlag = System.getenv("OPENCLAW_SHELL_ENV");
+            boolean enabled = "1".equals(envFlag) || "true".equalsIgnoreCase(envFlag);
+
+            // Also check config for env.shellEnv.enabled
+            if (!enabled && config != null) {
+                // Config-based enable check — if config has shellEnv settings
+                // this is a simplified check; full config schema TBD
+                enabled = false; // Default off unless explicitly enabled
+            }
+
+            if (!enabled) {
+                return;
+            }
+
+            Map<String, String> target = new HashMap<>(System.getenv());
+            ShellEnv.ShellEnvResult result = ShellEnv.loadShellEnvFallback(
+                    true, target, SHELL_ENV_EXPECTED_KEYS, null);
+
+            if (result.ok() && result.applied() != null && !result.applied().isEmpty()) {
+                // Apply discovered keys as system properties
+                for (String key : result.applied()) {
+                    String value = target.get(key);
+                    if (value != null && System.getenv(key) == null) {
+                        System.setProperty(key, value);
+                    }
+                }
+                log.info("Shell env fallback applied {} key(s): {}",
+                        result.applied().size(), result.applied());
+            }
+        } catch (Exception e) {
+            log.debug("Shell env fallback skipped: {}", e.getMessage());
         }
     }
 

@@ -2,6 +2,8 @@ package com.openclaw.gateway.runtime;
 
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
+import com.openclaw.common.infra.PortsInspect;
+import com.openclaw.common.infra.Warnings;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.Executors;
@@ -58,7 +60,34 @@ public class GatewayStartup {
      * Execute the full gateway startup sequence.
      */
     public void start() {
-        log.info("gateway starting on {}:{}", runtimeConfig.getBindHost(), runtimeConfig.getPort());
+        int port = runtimeConfig.getPort();
+
+        // 0. Check port availability before startup (mirrors TS ensurePortAvailable)
+        try {
+            PortsInspect.PortUsage portUsage = PortsInspect.inspectPort(port);
+            if (portUsage.status() == PortsInspect.PortStatus.BUSY) {
+                StringBuilder msg = new StringBuilder(
+                        String.format("Port %d is already in use", port));
+                if (portUsage.listeners() != null && !portUsage.listeners().isEmpty()) {
+                    PortsInspect.PortListener listener = portUsage.listeners().get(0);
+                    if (listener.command() != null) {
+                        msg.append(" by ").append(listener.command());
+                    }
+                    if (listener.pid() != null) {
+                        msg.append(" (PID ").append(listener.pid()).append(')');
+                    }
+                }
+                Warnings.addWarning(msg.toString());
+                log.warn("[openclaw] {}", msg);
+                for (String hint : portUsage.hints()) {
+                    log.warn("[openclaw]   {}", hint);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Port check skipped: {}", e.getMessage());
+        }
+
+        log.info("gateway starting on {}:{}", runtimeConfig.getBindHost(), port);
         log.info("  auth mode: {}", runtimeConfig.getAuthMode());
         log.info("  control UI: {} ({})",
                 runtimeConfig.isControlUiEnabled() ? "enabled" : "disabled",
