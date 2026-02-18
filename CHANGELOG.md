@@ -1,5 +1,38 @@
 # Changelog
 
+## Phase 44 — 命令系统深化 (2026-02-19)
+
+### Verified
+
+- `mvn compile` BUILD SUCCESS (7/7 模块) ✅
+- `mvn test` **202 / 202** pass ✅
+
+### Added — 新增命令
+
+| 文件 | 命令 | 说明 |
+|------|------|------|
+| `StatusCommands` | `/status` | 增强版：模型 + 渠道摘要 + 端口 + 更新 + 会话 |
+| `StatusCommands` | `/status all` | 全量状态报告，含渠道问题检测 |
+| `DoctorCommands` | `/doctor` | 诊断：配置 · API key · 端口 · 二进制 · 更新 |
+
+### Changed — 增强命令
+
+| 文件 | 修改 |
+|------|------|
+| `SessionCommands.handleRestart` | 接入 `Restart.triggerRestart` + `RestartSentinel` |
+| `CommandProcessor` | 注册 `StatusCommands` · `DoctorCommands` |
+
+### Infra 接入状态 — 14/14 全部接入 ✅
+
+| 新接入 | 接入位置 |
+|--------|---------|
+| `ChannelSummary` | `StatusCommands` |
+| `ChannelStatusIssues` | `StatusCommands` |
+| `Binaries` | `DoctorCommands` |
+| `Restart` | `SessionCommands.handleRestart` |
+
+---
+
 ## Phase 43 — infra/ 基础设施补齐 + 接入主流程 (2026-02-19)
 
 ### Verified — 编译 & 测试

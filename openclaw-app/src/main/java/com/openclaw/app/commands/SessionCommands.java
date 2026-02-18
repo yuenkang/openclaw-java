@@ -2,9 +2,12 @@ package com.openclaw.app.commands;
 
 import com.openclaw.agent.autoreply.reply.Abort;
 import com.openclaw.common.config.AgentDirs;
+import com.openclaw.common.config.ConfigPaths;
 import com.openclaw.common.config.ConfigRuntimeOverrides;
 
 import com.openclaw.common.config.SessionPaths;
+import com.openclaw.common.infra.Restart;
+import com.openclaw.common.infra.RestartSentinel;
 import com.openclaw.gateway.session.SessionPersistence;
 import com.openclaw.gateway.session.TranscriptStore;
 import com.openclaw.gateway.session.UsageTracker;
@@ -192,8 +195,31 @@ public class SessionCommands {
         }
 
         log.info("Restart requested for session: {}", sessionKey);
-        // TODO: Trigger actual restart mechanism
-        return CommandResult.text("⚙️ OpenClaw 正在重启中，请稍等片刻...\n\n🚧 _此功能尚未完全实现_");
+
+        // Authorize restart (opens a 30s window)
+        Restart.authorizeRestart();
+
+        // Write restart sentinel for state transfer
+        try {
+            var stateDir = ConfigPaths.resolveStateDir();
+            RestartSentinel.writeSentinel(stateDir, RestartSentinel.Payload.of(
+                    "command", "restarting",
+                    "Restart triggered by /restart command"));
+        } catch (Exception e) {
+            log.debug("Failed to write restart sentinel: {}", e.getMessage());
+        }
+
+        // Trigger platform-specific restart
+        Restart.RestartAttempt attempt = Restart.triggerRestart();
+
+        if (attempt.triggered()) {
+            return CommandResult.text(String.format(
+                    "⚙️ OpenClaw 正在重启中...\n方式: %s", attempt.method()));
+        } else {
+            return CommandResult.text(String.format(
+                    "⚠️ 自动重启失败 (%s): %s\n请手动重启 OpenClaw。",
+                    attempt.method(), attempt.message()));
+        }
     }
 
     public CommandResult handleAbort(String args, CommandContext ctx) {

@@ -31,6 +31,7 @@ public class CommandProcessor {
     public CommandProcessor(
             ConfigService configService,
             InfoCommands infoCommands,
+            StatusCommands statusCommands,
             SessionCommands sessionCommands,
             ConfigCommands configCommands,
             ModelCommands modelCommands,
@@ -40,17 +41,21 @@ public class CommandProcessor {
             AllowlistCommands allowlistCommands,
             PluginCommands pluginCommands,
             SubagentCommands subagentCommands,
-            TtsCommands ttsCommands) {
+            TtsCommands ttsCommands,
+            DoctorCommands doctorCommands) {
 
         this.configService = configService;
         this.infoCommands = infoCommands;
 
         // Info commands — commands-info.ts
         handlers.put("help", infoCommands::handleHelp);
-        handlers.put("status", infoCommands::handleStatus);
+        handlers.put("status", statusCommands::handleStatus);
         handlers.put("commands", infoCommands::handleCommands);
         handlers.put("whoami", infoCommands::handleWhoami);
         handlers.put("context", infoCommands::handleContext);
+
+        // Doctor command — commands/doctor.ts
+        handlers.put("doctor", doctorCommands::handleDoctor);
 
         // Session commands — commands-session.ts
         handlers.put("clear", sessionCommands::handleClear);
