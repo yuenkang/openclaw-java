@@ -1,5 +1,27 @@
 # Changelog
 
+## Phase 45 — 测试覆盖率提升 (2026-02-19)
+
+### Verified
+
+- `mvn test` BUILD SUCCESS — **612 / 612** pass (5 模块) ✅
+
+### Added — 新增测试文件 (9 个)
+
+| 模块 | 测试文件 | 测试数 |
+|------|---------|--------|
+| openclaw-app | `CommandProcessorTest` | 8 |
+| openclaw-app | `StatusCommandsTest` | 8 |
+| openclaw-app | `DoctorCommandsTest` | 9 |
+| openclaw-app | `ConfigCommandsTest` | 4 |
+| openclaw-gateway | `OriginCheckerTest` | 23 |
+| openclaw-gateway | `CronParseTest` | 13 |
+| openclaw-gateway | `ChatSanitizerTest` | 13 |
+| openclaw-agent | `ModelProviderRegistryTest` | 13 |
+| openclaw-agent | `ContextPrunerTest` | 9 |
+
+---
+
 ## Phase 44 — 命令系统深化 (2026-02-19)
 
 ### Verified
