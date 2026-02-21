@@ -1,12 +1,14 @@
 package com.openclaw.agent.models;
 
 import com.openclaw.agent.models.ModelSelector.ModelRef;
+import com.openclaw.agent.runtime.ErrorClassifier;
 import com.openclaw.common.config.OpenClawConfig;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 
 /**
@@ -144,7 +146,27 @@ public class ModelFallbackRunner {
                                 new ModelFallbackException("Aborted", attempts));
                     }
 
-                    // Try next candidate
+                    // Use ErrorClassifier for smarter failover decisions
+                    ErrorClassifier.FailoverReason reason = ErrorClassifier.classifyFailoverReason(cause.getMessage());
+
+                    if (!ErrorClassifier.isFailoverEligible(reason)) {
+                        // Context overflow / model not found / unknown — don't retry
+                        log.debug("Error classified as {} — not eligible for failover", reason);
+                        return CompletableFuture.failedFuture(
+                                new ModelFallbackException(
+                                        reason + ": " + cause.getMessage(), attempts));
+                    }
+
+                    // Exponential backoff for rate limit / overloaded
+                    long delayMs = computeBackoffMs(reason, index);
+                    if (delayMs > 0) {
+                        log.debug("Backoff {}ms before next candidate (reason={})", delayMs, reason);
+                        return CompletableFuture.supplyAsync(() -> null,
+                                CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS))
+                                .thenCompose(ignored -> runCandidates(candidates, index + 1, attempts, run, onError));
+                    }
+
+                    // Try next candidate immediately
                     return runCandidates(candidates, index + 1, attempts, run, onError);
                 });
     }
@@ -175,6 +197,25 @@ public class ModelFallbackRunner {
             return hse.getCode();
         }
         return null;
+    }
+
+    // ── Backoff strategy ─────────────────────────────────────────
+
+    /** Base delay in ms for retryable errors. */
+    static final long BASE_BACKOFF_MS = 500;
+    /** Maximum backoff delay in ms. */
+    static final long MAX_BACKOFF_MS = 8000;
+
+    /**
+     * Compute exponential backoff delay for retryable error reasons.
+     * Returns 0 for errors that should retry immediately (auth, billing).
+     */
+    static long computeBackoffMs(ErrorClassifier.FailoverReason reason, int attemptIndex) {
+        return switch (reason) {
+            case RATE_LIMIT, OVERLOADED, TIMEOUT ->
+                Math.min(BASE_BACKOFF_MS * (1L << attemptIndex), MAX_BACKOFF_MS);
+            default -> 0;
+        };
     }
 
     // =========================================================================

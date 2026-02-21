@@ -1,5 +1,31 @@
 # Changelog
 
+## Phase 46 — 运行时增强与可观测性 (2026-02-21)
+
+### Verified
+
+- `mvn test` BUILD SUCCESS — **751 / 751** pass (5 模块) ✅
+
+### Added — 新增文件 (7 个)
+
+| 模块 | 文件 | 类型 | 说明 |
+|------|------|------|------|
+| openclaw-agent | `ErrorClassifierTest` | 测试 | 7 类错误分类 + 文本清理 + 格式化 (62 tests) |
+| openclaw-agent | `ModelFallbackRunnerTest` | 测试 | backoff 计算 + 异常类型 + 成功/失败场景 (12 tests) |
+| openclaw-agent | `CompactionServiceTest` | 测试 | token 估算 + 历史裁剪 + 分块 (17 tests) |
+| openclaw-agent | `ContextWindowGuardTest` | 测试 | 窗口解析 + 阈值评估 (13 tests) |
+| openclaw-gateway | `RuntimeMetrics` | 功能 | 线程安全指标收集器 (WebSocket/HTTP/Agent/消息) |
+| openclaw-gateway | `RuntimeMetricsTest` | 测试 | 全指标生命周期 + 快照 (18 tests) |
+| openclaw-app | `HealthEndpoint` | 功能 | `/health` + `/metrics` REST 端点 |
+
+### Changed — 增强
+
+| 文件 | 说明 |
+|------|------|
+| `ModelFallbackRunner` | 集成 ErrorClassifier 做 failover 决策 + 指数退避 (rate_limit/overloaded) |
+
+---
+
 ## Phase 45 — 测试覆盖率提升 (2026-02-19)
 
 ### Verified
