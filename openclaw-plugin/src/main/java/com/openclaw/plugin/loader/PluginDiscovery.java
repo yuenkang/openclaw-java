@@ -1,5 +1,6 @@
-package com.openclaw.agent.plugins;
+package com.openclaw.plugin.loader;
 
+import com.openclaw.plugin.PluginTypes;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -89,7 +90,17 @@ public final class PluginDiscovery {
                     workspaceDir, candidates, diagnostics, seen);
         }
 
-        // 3. Scan extra paths
+        // 3. Scan bundled plugins directory (via PluginBundledDir)
+        String bundledDir = PluginBundledDir.resolve();
+        if (bundledDir != null) {
+            Path bundledPath = Path.of(bundledDir);
+            if (Files.isDirectory(bundledPath)) {
+                discoverInDirectory(bundledPath, PluginTypes.PluginOrigin.BUNDLED,
+                        workspaceDir, candidates, diagnostics, seen);
+            }
+        }
+
+        // 4. Scan extra paths
         if (extraPaths != null) {
             for (String rawPath : extraPaths) {
                 Path p = Path.of(rawPath).toAbsolutePath().normalize();

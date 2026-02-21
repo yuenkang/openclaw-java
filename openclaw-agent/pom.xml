@@ -23,6 +23,10 @@
             <artifactId>openclaw-common</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-plugin</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
         </dependency>

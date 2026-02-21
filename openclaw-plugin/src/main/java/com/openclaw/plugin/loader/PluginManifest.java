@@ -1,5 +1,6 @@
-package com.openclaw.agent.plugins;
+package com.openclaw.plugin.loader;
 
+import com.openclaw.plugin.PluginTypes;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -46,6 +47,8 @@ public final class PluginManifest {
         private String name;
         private String description;
         private String version;
+        /** Fully-qualified Java class that implements PluginTypes.PluginDefinition. */
+        private String entryClass;
         private Map<String, PluginTypes.PluginConfigUiHint> uiHints;
     }
 
@@ -70,10 +73,7 @@ public final class PluginManifest {
      */
     public static String resolveManifestPath(String rootDir) {
         Path candidate = Path.of(rootDir, PLUGIN_MANIFEST_FILENAME);
-        if (Files.exists(candidate)) {
-            return candidate.toString();
-        }
-        return candidate.toString(); // Return default path even if not found
+        return candidate.toString();
     }
 
     /**
@@ -117,6 +117,7 @@ public final class PluginManifest {
         String name = raw.get("name") instanceof String s ? s.trim() : null;
         String description = raw.get("description") instanceof String s ? s.trim() : null;
         String version = raw.get("version") instanceof String s ? s.trim() : null;
+        String entryClass = raw.get("entryClass") instanceof String s ? s.trim() : null;
         List<String> channels = normalizeStringList(raw.get("channels"));
         List<String> providers = normalizeStringList(raw.get("providers"));
         List<String> skills = normalizeStringList(raw.get("skills"));
@@ -131,6 +132,7 @@ public final class PluginManifest {
                 .name(name)
                 .description(description)
                 .version(version)
+                .entryClass(entryClass)
                 .build();
 
         return new ManifestLoadResult.Success(manifest, manifestPath);

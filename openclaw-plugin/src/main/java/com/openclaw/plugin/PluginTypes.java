@@ -1,5 +1,6 @@
 package com.openclaw.plugin;
 
+import com.openclaw.common.config.OpenClawConfig;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -7,9 +8,11 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
- * Plugin type definitions — enums, records, and lifecycle-hook event types.
+ * Plugin type definitions — enums, records, lifecycle-hook event types,
+ * and registration helpers.
  * Corresponds to TypeScript's plugins/types.ts.
  */
 public final class PluginTypes {
@@ -21,12 +24,52 @@ public final class PluginTypes {
     // Enums
     // =========================================================================
 
-    public enum PluginOrigin {
-        BUNDLED, GLOBAL, WORKSPACE, CONFIG
+    public enum PluginKind {
+        CHANNEL("channel"),
+        MEMORY("memory"),
+        PROVIDER("provider"),
+        TOOL("tool"),
+        GENERAL("general");
+
+        private final String label;
+
+        PluginKind(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
+
+        public static PluginKind fromString(String s) {
+            if (s == null)
+                return GENERAL;
+            return switch (s.toLowerCase()) {
+                case "channel" -> CHANNEL;
+                case "memory" -> MEMORY;
+                case "provider" -> PROVIDER;
+                case "tool" -> TOOL;
+                default -> GENERAL;
+            };
+        }
     }
 
-    public enum PluginKind {
-        MEMORY
+    public enum PluginOrigin {
+        BUNDLED("bundled"),
+        INSTALLED("installed"),
+        WORKSPACE("workspace"),
+        LOCAL("local"),
+        CONFIG("config");
+
+        private final String label;
+
+        PluginOrigin(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
     }
 
     public enum PluginStatus {
@@ -38,45 +81,144 @@ public final class PluginTypes {
     }
 
     // =========================================================================
-    // Plugin record (registered plugin metadata)
+    // Plugin logger
+    // =========================================================================
+
+    public interface PluginLogger {
+        default void debug(String message) {
+        }
+
+        void info(String message);
+
+        void warn(String message);
+
+        void error(String message);
+    }
+
+    // =========================================================================
+    // Plugin config UI hints
     // =========================================================================
 
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class PluginRecord {
-        private String id;
-        private String name;
-        private String version;
-        private String description;
-        private PluginKind kind;
-        private String source;
-        private PluginOrigin origin;
-        private String workspaceDir;
-        private boolean enabled;
-        private PluginStatus status;
-        private String error;
-        private List<String> toolNames;
-        private List<String> channels;
-        private List<String> providers;
-        private List<String> cliCommands;
-        private List<String> services;
-        private List<String> commands;
-        private int httpHandlers;
-        private int hookCount;
-        private boolean configSchema;
+    public static class PluginConfigUiHint {
+        private String label;
+        private String help;
+        private boolean advanced;
+        private boolean sensitive;
+        private String placeholder;
     }
+
+    // =========================================================================
+    // Plugin diagnostic
+    // =========================================================================
 
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class PluginDiagnostic {
-        private DiagnosticLevel level;
-        private String message;
         private String pluginId;
+        private String level; // "info", "warn", "error"
+        private String message;
+    }
+
+    // =========================================================================
+    // Plugin tool context
+    // =========================================================================
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PluginToolContext {
+        private OpenClawConfig config;
+        private String workspaceDir;
+        private String agentDir;
+        private String agentId;
+        private String sessionKey;
+        private String messageChannel;
+        private String agentAccountId;
+        private boolean sandboxed;
+    }
+
+    // =========================================================================
+    // Plugin API (what plugins receive to register capabilities)
+    // =========================================================================
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PluginApi {
+        private String id;
         private String source;
+        private PluginLogger logger;
+        private OpenClawConfig config;
+        private Map<String, Object> pluginConfig;
+
+        // Registration callbacks — set by the registry
+        @Builder.Default
+        private Consumer<HookRegistration> hookRegistrar = r -> {
+        };
+        @Builder.Default
+        private Consumer<ToolRegistration> toolRegistrar = r -> {
+        };
+        @Builder.Default
+        private Consumer<CommandRegistration> commandRegistrar = r -> {
+        };
+    }
+
+    // =========================================================================
+    // Registration types
+    // =========================================================================
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class HookRegistration {
+        private List<String> events;
+        private Object entry; // HookEntry when in agent context
+        private boolean register;
+        private String name;
+        private String description;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ToolRegistration {
+        private String name;
+        private List<String> names;
+        private boolean optional;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CommandRegistration {
+        private String name;
+        private String description;
+        private boolean acceptsArgs;
+        private boolean requireAuth;
+    }
+
+    // =========================================================================
+    // Plugin definition (what a plugin module exports)
+    // =========================================================================
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PluginDefinition {
+        private String name;
+        private Consumer<PluginApi> register;
     }
 
     // =========================================================================
@@ -297,21 +439,5 @@ public final class PluginTypes {
         private String description;
         private boolean acceptsArgs;
         private boolean requireAuth;
-    }
-
-    // =========================================================================
-    // Plugin config UI hint
-    // =========================================================================
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class PluginConfigUiHint {
-        private String label;
-        private String help;
-        private Boolean advanced;
-        private Boolean sensitive;
-        private String placeholder;
     }
 }

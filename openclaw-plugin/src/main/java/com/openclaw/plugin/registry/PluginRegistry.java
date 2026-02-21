@@ -1,92 +1,197 @@
 package com.openclaw.plugin.registry;
 
-import com.openclaw.plugin.OpenClawPlugin;
-import com.openclaw.plugin.loader.PluginLoader;
+import com.openclaw.plugin.PluginTypes;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Manages registered plugin components (tools, hooks, commands).
+ * Plugin registry — central store for all plugin registrations.
  * Corresponds to TypeScript's plugins/registry.ts.
  */
 @Slf4j
-public class PluginRegistry {
+public final class PluginRegistry {
 
-    /** Registered components by type → name → handler. */
-    private final Map<String, Map<String, Object>> components = new ConcurrentHashMap<>();
+    // =========================================================================
+    // Registration types
+    // =========================================================================
 
-    private final PluginLoader pluginLoader;
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PluginRecord {
+        private String id;
+        private String name;
+        private String version;
+        private String description;
+        private PluginTypes.PluginKind kind;
+        private String source;
+        private PluginTypes.PluginOrigin origin;
+        private String workspaceDir;
+        private boolean enabled;
+        @Builder.Default
+        private String status = "loaded"; // "loaded", "disabled", "error"
+        private String error;
+        @Builder.Default
+        private List<String> tools = List.of();
+        @Builder.Default
+        private List<String> channels = List.of();
+        @Builder.Default
+        private List<String> providers = List.of();
+        @Builder.Default
+        private List<String> commands = List.of();
+        private int hookCount;
+        private boolean configSchema;
+    }
 
-    public PluginRegistry(PluginLoader pluginLoader) {
-        this.pluginLoader = pluginLoader;
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PluginToolRegistration {
+        private String pluginId;
+        private List<String> names;
+        private boolean optional;
+        private String source;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PluginHookRegistration {
+        private String pluginId;
+        private List<String> events;
+        private String source;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PluginCommandRegistration {
+        private String pluginId;
+        private String name;
+        private String description;
+        private String source;
+    }
+
+    // =========================================================================
+    // Registry state
+    // =========================================================================
+
+    private final List<PluginRecord> plugins = new CopyOnWriteArrayList<>();
+    private final List<PluginToolRegistration> tools = new CopyOnWriteArrayList<>();
+    private final List<PluginHookRegistration> hooks = new CopyOnWriteArrayList<>();
+    private final List<PluginCommandRegistration> commands = new CopyOnWriteArrayList<>();
+    private final List<PluginTypes.PluginDiagnostic> diagnostics = new CopyOnWriteArrayList<>();
+    private final Map<String, PluginRecord> pluginById = new ConcurrentHashMap<>();
+
+    // =========================================================================
+    // Registration
+    // =========================================================================
+
+    public void registerPlugin(PluginRecord record) {
+        plugins.add(record);
+        pluginById.put(record.getId(), record);
+        log.debug("Registered plugin: {} ({})", record.getId(), record.getStatus());
+    }
+
+    public void registerTool(PluginToolRegistration registration) {
+        tools.add(registration);
+    }
+
+    public void registerHook(PluginHookRegistration registration) {
+        hooks.add(registration);
+    }
+
+    public void registerCommand(PluginCommandRegistration registration) {
+        commands.add(registration);
+    }
+
+    public void addDiagnostic(PluginTypes.PluginDiagnostic diagnostic) {
+        diagnostics.add(diagnostic);
+    }
+
+    // =========================================================================
+    // Queries
+    // =========================================================================
+
+    public List<PluginRecord> getPlugins() {
+        return List.copyOf(plugins);
+    }
+
+    public Optional<PluginRecord> getPlugin(String id) {
+        return Optional.ofNullable(pluginById.get(id));
+    }
+
+    public List<PluginToolRegistration> getTools() {
+        return List.copyOf(tools);
+    }
+
+    public List<PluginHookRegistration> getHooks() {
+        return List.copyOf(hooks);
+    }
+
+    public List<PluginCommandRegistration> getCommands() {
+        return List.copyOf(commands);
+    }
+
+    public List<PluginTypes.PluginDiagnostic> getDiagnostics() {
+        return List.copyOf(diagnostics);
+    }
+
+    public List<PluginRecord> getEnabledPlugins() {
+        return plugins.stream().filter(PluginRecord::isEnabled).toList();
+    }
+
+    public List<PluginRecord> getPluginsByKind(PluginTypes.PluginKind kind) {
+        return plugins.stream()
+                .filter(p -> p.getKind() == kind)
+                .toList();
     }
 
     /**
-     * Initialize all plugins by calling their register() methods.
+     * Get plugin tool names for a given plugin.
      */
-    public void initializeAll() {
-        List<OpenClawPlugin> plugins = pluginLoader.loadAll();
+    public List<String> getToolNamesForPlugin(String pluginId) {
+        return tools.stream()
+                .filter(t -> pluginId.equals(t.getPluginId()))
+                .flatMap(t -> t.getNames().stream())
+                .toList();
+    }
 
-        OpenClawPlugin.OpenClawPluginApi api = new OpenClawPlugin.OpenClawPluginApi() {
-            @Override
-            public void registerTool(String name, Object handler) {
-                register("tool", name, handler);
-            }
+    // =========================================================================
+    // Summary
+    // =========================================================================
 
-            @Override
-            public void registerHook(String event, Object handler) {
-                register("hook", event, handler);
-            }
-
-            @Override
-            public void registerCommand(String name, Object handler) {
-                register("command", name, handler);
-            }
-        };
-
-        for (OpenClawPlugin plugin : plugins) {
-            try {
-                plugin.register(api);
-                log.info("Initialized plugin: {}", plugin.getName());
-            } catch (Exception e) {
-                log.error("Failed to initialize plugin {}: {}", plugin.getName(), e.getMessage(), e);
-            }
-        }
-
-        log.info("Initialized {} plugins, registered {} components",
-                plugins.size(), countComponents());
+    public Map<String, Object> getSummary() {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalPlugins", plugins.size());
+        summary.put("enabledPlugins", getEnabledPlugins().size());
+        summary.put("totalTools", tools.size());
+        summary.put("totalHooks", hooks.size());
+        summary.put("totalCommands", commands.size());
+        summary.put("diagnostics", diagnostics.size());
+        return summary;
     }
 
     /**
-     * Register a component.
+     * Clear all registrations (useful for testing or reload).
      */
-    public void register(String type, String name, Object handler) {
-        components.computeIfAbsent(type, k -> new ConcurrentHashMap<>()).put(name, handler);
-        log.debug("Registered {} component: {}", type, name);
-    }
-
-    /**
-     * Get a component by type and name.
-     */
-    @SuppressWarnings("unchecked")
-    public <T> Optional<T> get(String type, String name) {
-        Map<String, Object> typeMap = components.get(type);
-        if (typeMap == null)
-            return Optional.empty();
-        return Optional.ofNullable((T) typeMap.get(name));
-    }
-
-    /**
-     * List all component names of a given type.
-     */
-    public Set<String> list(String type) {
-        Map<String, Object> typeMap = components.get(type);
-        return typeMap != null ? Collections.unmodifiableSet(typeMap.keySet()) : Set.of();
-    }
-
-    private int countComponents() {
-        return components.values().stream().mapToInt(Map::size).sum();
+    public void clear() {
+        plugins.clear();
+        tools.clear();
+        hooks.clear();
+        commands.clear();
+        diagnostics.clear();
+        pluginById.clear();
     }
 }

@@ -1,9 +1,12 @@
 package com.openclaw.app.commands;
 
+import com.openclaw.app.config.PluginBootstrap;
 import com.openclaw.common.config.ConfigService;
 import com.openclaw.common.config.OpenClawConfig;
+import com.openclaw.plugin.commands.PluginCommandProcessor;
 import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -99,6 +102,22 @@ public class CommandProcessor {
 
         // TTS commands — commands-tts.ts
         handlers.put("tts", ttsCommands::handleTts);
+    }
+
+    /**
+     * Register a dynamic command handler — used by PluginCli to add
+     * plugin-provided slash commands at runtime.
+     *
+     * @return true if registered, false if command already exists
+     */
+    public boolean registerDynamic(String command, CommandHandler handler) {
+        if (handlers.containsKey(command)) {
+            log.debug("Dynamic command /{} already registered, skipping", command);
+            return false;
+        }
+        handlers.put(command, handler);
+        log.info("Registered dynamic plugin command: /{}", command);
+        return true;
     }
 
     /** Get the InfoCommands instance for direct access (e.g. pagination). */

@@ -34,6 +34,23 @@ public class ToolRegistry {
     }
 
     /**
+     * Register a plugin-resolved tool by wrapping it as an AgentTool.
+     * The handler from ResolvedPluginTool is adapted to the AgentTool interface.
+     */
+    public void registerPluginTool(
+            com.openclaw.plugin.tools.PluginToolResolver.ResolvedPluginTool pluginTool) {
+        if (tools.containsKey(pluginTool.getName())) {
+            log.warn("Plugin tool '{}' conflicts with existing tool, skipping",
+                    pluginTool.getName());
+            return;
+        }
+        AgentTool wrapped = new PluginToolAdapter(pluginTool);
+        tools.put(pluginTool.getName(), wrapped);
+        log.info("Registered plugin tool: {} (plugin: {})",
+                pluginTool.getName(), pluginTool.getPluginId());
+    }
+
+    /**
      * Get a tool by name.
      */
     public Optional<AgentTool> get(String name) {

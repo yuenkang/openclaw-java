@@ -30,7 +30,7 @@ class CommandProcessorTest {
                 new BashCommands(),
                 new ApproveCommands(),
                 new AllowlistCommands(),
-                new PluginCommands(),
+                new PluginCommands(null),
                 new SubagentCommands(),
                 new TtsCommands(),
                 new DoctorCommands());

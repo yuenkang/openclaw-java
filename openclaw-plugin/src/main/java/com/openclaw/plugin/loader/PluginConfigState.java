@@ -1,5 +1,6 @@
-package com.openclaw.agent.plugins;
+package com.openclaw.plugin.loader;
 
+import com.openclaw.plugin.PluginTypes;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -165,7 +166,6 @@ public final class PluginConfigState {
             return new MemorySlotDecision(true);
         }
         if (slot != null && slot.isEmpty()) {
-            // slot == "" means "none" — memory disabled
             return new MemorySlotDecision(false, "memory slot disabled", false);
         }
         if (slot != null) {

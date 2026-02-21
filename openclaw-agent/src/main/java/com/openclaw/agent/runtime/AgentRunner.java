@@ -3,6 +3,8 @@ package com.openclaw.agent.runtime;
 import com.openclaw.agent.hooks.InternalHookRegistry;
 import com.openclaw.agent.hooks.InternalHookRegistry.HookEvent;
 import com.openclaw.agent.hooks.InternalHookRegistry.HookEventType;
+import com.openclaw.plugin.registry.PluginRegistry;
+import com.openclaw.plugin.tools.PluginToolResolver;
 import com.openclaw.agent.media.MediaApply;
 import com.openclaw.agent.media.MediaFormat;
 import com.openclaw.agent.media.MediaTypes;
@@ -14,6 +16,8 @@ import com.openclaw.agent.skills.SkillLoader;
 import com.openclaw.agent.tools.AgentTool;
 import com.openclaw.agent.tools.ToolRegistry;
 import com.openclaw.common.config.OpenClawConfig;
+import com.openclaw.plugin.PluginTypes;
+import com.openclaw.plugin.hooks.PluginHookRunner;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -79,22 +83,38 @@ public class AgentRunner {
     private final int maxTurns;
     private final InternalHookRegistry hookRegistry;
     private final SubagentRegistry subagentRegistry;
+    private final PluginHookRunner pluginHookRunner;
+    private final PluginRegistry pluginRegistry;
 
     public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry) {
-        this(modelRegistry, toolRegistry, 25, null, null);
+        this(modelRegistry, toolRegistry, 25, null, null, null, null);
     }
 
     public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry, int maxTurns) {
-        this(modelRegistry, toolRegistry, maxTurns, null, null);
+        this(modelRegistry, toolRegistry, maxTurns, null, null, null, null);
     }
 
     public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry, int maxTurns,
             InternalHookRegistry hookRegistry, SubagentRegistry subagentRegistry) {
+        this(modelRegistry, toolRegistry, maxTurns, hookRegistry, subagentRegistry, null, null);
+    }
+
+    public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry, int maxTurns,
+            InternalHookRegistry hookRegistry, SubagentRegistry subagentRegistry,
+            PluginHookRunner pluginHookRunner) {
+        this(modelRegistry, toolRegistry, maxTurns, hookRegistry, subagentRegistry, pluginHookRunner, null);
+    }
+
+    public AgentRunner(ModelProviderRegistry modelRegistry, ToolRegistry toolRegistry, int maxTurns,
+            InternalHookRegistry hookRegistry, SubagentRegistry subagentRegistry,
+            PluginHookRunner pluginHookRunner, PluginRegistry pluginRegistry) {
         this.modelRegistry = modelRegistry;
         this.toolRegistry = toolRegistry;
         this.maxTurns = maxTurns;
         this.hookRegistry = hookRegistry;
         this.subagentRegistry = subagentRegistry;
+        this.pluginHookRunner = pluginHookRunner != null ? pluginHookRunner : PluginHookRunner.NOOP;
+        this.pluginRegistry = pluginRegistry;
     }
 
     /**
@@ -110,6 +130,39 @@ public class AgentRunner {
      */
     public AgentResult run(AgentRunContext context) {
         try {
+            // --- Plugin hook: before_agent_start ---
+            PluginTypes.BeforeAgentStartResult hookResult = pluginHookRunner.runBeforeAgentStart(
+                    PluginTypes.BeforeAgentStartEvent.builder()
+                            .prompt(context.getSystemPrompt())
+                            .build(),
+                    PluginTypes.AgentContext.builder()
+                            .agentId(context.getAgentId())
+                            .sessionKey(context.getSessionKey())
+                            .workspaceDir(context.getCwd())
+                            .build());
+            if (hookResult != null) {
+                if (hookResult.getSystemPrompt() != null) {
+                    context.setSystemPrompt(hookResult.getSystemPrompt());
+                }
+                if (hookResult.getPrependContext() != null) {
+                    String existing = context.getSystemPrompt() != null ? context.getSystemPrompt() : "";
+                    context.setSystemPrompt(hookResult.getPrependContext() + "\n\n" + existing);
+                }
+            }
+            // --- Resolve and inject plugin tools ---
+            if (pluginRegistry != null) {
+                var pluginTools = PluginToolResolver.resolvePluginTools(
+                        pluginRegistry,
+                        toolRegistry.getToolNames(),
+                        null);
+                for (var pt : pluginTools) {
+                    toolRegistry.registerPluginTool(pt);
+                }
+                if (!pluginTools.isEmpty()) {
+                    log.info("Injected {} plugin tools into agent", pluginTools.size());
+                }
+            }
+
             // --- Apply media-understanding for non-image attachments ---
             if (context.getMediaAttachments() != null && !context.getMediaAttachments().isEmpty()) {
                 try {
@@ -470,12 +523,45 @@ public class AgentRunner {
                             "success", String.valueOf(result.isSuccess()),
                             "turns", String.valueOf(result.getTurns()))));
         }
+        // Plugin hook: agent_end
+        pluginHookRunner.runAgentEnd(
+                PluginTypes.AgentEndEvent.builder()
+                        .success(result.isSuccess())
+                        .error(result.getError())
+                        .build(),
+                PluginTypes.AgentContext.builder()
+                        .agentId(context.getAgentId())
+                        .sessionKey(context.getSessionKey())
+                        .workspaceDir(context.getCwd())
+                        .build());
     }
 
+    @SuppressWarnings("unchecked")
     private AgentTool.ToolResult executeTool(ModelProvider.ToolUse toolUse, AgentRunContext context) {
         Optional<AgentTool> tool = toolRegistry.get(toolUse.getName());
         if (tool.isEmpty()) {
             return AgentTool.ToolResult.fail("Unknown tool: " + toolUse.getName());
+        }
+
+        // Plugin hook: before_tool_call — can modify params or block
+        PluginTypes.BeforeToolCallResult beforeResult = pluginHookRunner.runBeforeToolCall(
+                PluginTypes.BeforeToolCallEvent.builder()
+                        .toolName(toolUse.getName())
+                        .params(toolUse.getInput() instanceof Map
+                                ? (Map<String, Object>) toolUse.getInput()
+                                : Map.of())
+                        .build(),
+                PluginTypes.AgentContext.builder()
+                        .agentId(context.getAgentId())
+                        .sessionKey(context.getSessionKey())
+                        .workspaceDir(context.getCwd())
+                        .build());
+        if (beforeResult != null && Boolean.TRUE.equals(beforeResult.getBlock())) {
+            String reason = beforeResult.getBlockReason() != null
+                    ? beforeResult.getBlockReason()
+                    : "blocked by plugin";
+            log.info("Tool {} blocked by plugin: {}", toolUse.getName(), reason);
+            return AgentTool.ToolResult.fail("Tool blocked: " + reason);
         }
 
         // Hook: tool execution start
@@ -488,6 +574,7 @@ public class AgentRunner {
                             "toolId", toolUse.getId() != null ? toolUse.getId() : "")));
         }
 
+        long toolStartTime = System.currentTimeMillis();
         try {
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             com.fasterxml.jackson.databind.JsonNode params = mapper.valueToTree(toolUse.getInput());
@@ -511,6 +598,20 @@ public class AgentRunner {
                                 "toolId", toolUse.getId() != null ? toolUse.getId() : "",
                                 "success", String.valueOf(result.isSuccess()))));
             }
+
+            // Plugin hook: after_tool_call
+            pluginHookRunner.runAfterToolCall(
+                    PluginTypes.AfterToolCallEvent.builder()
+                            .toolName(toolUse.getName())
+                            .result(result.isSuccess() ? result.getOutput() : null)
+                            .error(result.isSuccess() ? null : result.getError())
+                            .durationMs(System.currentTimeMillis() - toolStartTime)
+                            .build(),
+                    PluginTypes.AgentContext.builder()
+                            .agentId(context.getAgentId())
+                            .sessionKey(context.getSessionKey())
+                            .workspaceDir(context.getCwd())
+                            .build());
 
             return result;
         } catch (Exception e) {

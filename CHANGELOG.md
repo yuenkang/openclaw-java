@@ -1,5 +1,75 @@
 # Changelog
 
+## Phase 48 — Plugin 激活链完整实现 & 死代码清理 (2026-02-21)
+
+### Verified
+
+- `mvn test` BUILD SUCCESS — **51 tests**, 0 failures ✅
+
+### Added — 插件激活链
+
+实现从 manifest 到 `register(api)` 的完整插件激活流程：
+
+| 类型 | 文件 | 说明 |
+|------|------|------|
+| **MODIFY** | `PluginManifest.Manifest` | 新增 `entryClass` 字段（指定插件入口类） |
+| **MODIFY** | `PluginLoader` | 新增 `activatePlugin()` + `buildPluginApi()` + `buildPluginClassLoader()` |
+| **MODIFY** | `PluginLoader.PluginLoadOptions` | 新增 `commandProcessor` 参数 |
+| **MODIFY** | `PluginBootstrap.init()` | 重排初始化顺序：先建 commandProcessor → 再 loadPlugins → bridgePluginCommands |
+| **MODIFY** | `PluginRegistry` | 新增 `registerTool/registerHook/registerCommand` + diagnostics 列表 |
+| **MODIFY** | `PluginCommandProcessor` | 接入 PluginApi commandRegistrar |
+| **NEW** | `PluginToolAdapter` | 将 `ResolvedPluginTool` 适配为 `AgentTool` 接口 |
+| **MODIFY** | `PluginCommands` | `/plugin` 命令完整实现（list/info/status + 插件命令路由） |
+| **MODIFY** | `CommandProcessor` | 新增 `registerDynamic()` + PluginBootstrap 桥接 |
+
+### Changed — 未连接文件接入 & 清理
+
+| 类型 | 文件 | 说明 |
+|------|------|------|
+| **DELETE** | `OpenClawPlugin.java` | 与 `PluginTypes.PluginDefinition` 重复，无任何引用 |
+| **MODIFY** | `PluginBootstrap.installPlugin()` | 接入 `PluginInstallRecord.recordInstall()` 持久化安装信息 |
+| **MODIFY** | `AgentRunner` | 新增 `PluginRegistry` 参数，`run()` 中调用 `PluginToolResolver.resolvePluginTools()` 注入插件工具 |
+| **MODIFY** | `ToolRegistry` | 新增 `registerPluginTool()` 方法 |
+
+### 插件激活流程
+
+```
+openclaw.plugin.json → PluginLoader.loadCandidate()
+  → parse manifest (entryClass)
+  → activatePlugin()
+    → buildPluginClassLoader()
+    → loadClass(entryClass)
+    → buildPluginApi(registrars → Registry + CommandProcessor)
+    → definition.register(api) ← 插件入口
+```
+
+---
+
+
+### Verified
+
+- `mvn test` BUILD SUCCESS — **779 / 779** pass (5 模块) ✅
+
+### Changed — 模块重构 & 生命周期接入
+
+将 `openclaw-agent/plugins/`（6 文件）合并到 `openclaw-plugin` 独立模块，并实现完整的 Plugin 生命周期接入。
+
+| 类型 | 文件 | 说明 |
+|------|------|------|
+| **NEW** | `hooks/PluginHookRunner` | 14 种钩子执行器（voidHook 并行 + modifyingHook 顺序合并） |
+| **NEW** | `commands/PluginCommandProcessor` | 斜杠命令注册/匹配/执行/权限验证 |
+| **NEW** | `tools/PluginToolResolver` | 插件工具解析注入 Agent（冲突检测 + allowlist） |
+| **NEW** | `services/PluginServiceManager` | 后台服务注册/启停/反序清理 |
+| 合并 | `PluginTypes` | agent 版 + plugin 版合二为一 |
+| 迁移 | `PluginLoader/Discovery/ConfigState/Manifest` → `plugin.loader` | 插件加载链 |
+| 迁移 | `PluginRegistry` → `plugin.registry` | 插件注册表 |
+| 删除 | `openclaw-agent/plugins/` | 6 个冗余文件 |
+| **MODIFY** | `AgentRunner` | 接入 4 种钩子（beforeAgentStart/agentEnd/beforeToolCall/afterToolCall） |
+| **MODIFY** | `PluginBootstrap` | 升级为完整生命周期管理（gatewayStart/Stop + 暴露全部子系统） |
+| **NEW** | 4 个测试文件 | HookRunnerTest + CommandProcessorTest + ToolResolverTest + ServiceManagerTest（28 测试） |
+
+---
+
 ## Phase 46 — 运行时增强与可观测性 (2026-02-21)
 
 ### Verified
