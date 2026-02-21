@@ -1,6 +1,6 @@
 package com.openclaw.app.commands;
 
-import com.openclaw.agent.autoreply.reply.Abort;
+import com.openclaw.autoreply.reply.Abort;
 import com.openclaw.common.config.AgentDirs;
 import com.openclaw.common.config.ConfigPaths;
 import com.openclaw.common.config.ConfigRuntimeOverrides;

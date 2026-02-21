@@ -1,7 +1,7 @@
 package com.openclaw.app.commands;
 
-import com.openclaw.agent.autoreply.CommandsRegistryData;
-import com.openclaw.agent.autoreply.Status;
+import com.openclaw.autoreply.CommandsRegistryData;
+import com.openclaw.autoreply.Status;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.common.config.AgentDirs;
 import com.openclaw.common.config.ConfigRuntimeOverrides;

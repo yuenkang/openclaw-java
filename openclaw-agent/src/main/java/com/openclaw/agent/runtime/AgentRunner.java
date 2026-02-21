@@ -1,14 +1,14 @@
 package com.openclaw.agent.runtime;
 
-import com.openclaw.agent.hooks.InternalHookRegistry;
-import com.openclaw.agent.hooks.InternalHookRegistry.HookEvent;
-import com.openclaw.agent.hooks.InternalHookRegistry.HookEventType;
+import com.openclaw.hooks.InternalHookRegistry;
+import com.openclaw.hooks.InternalHookRegistry.HookEvent;
+import com.openclaw.hooks.InternalHookRegistry.HookEventType;
 import com.openclaw.plugin.registry.PluginRegistry;
 import com.openclaw.plugin.tools.PluginToolResolver;
-import com.openclaw.agent.media.MediaApply;
-import com.openclaw.agent.media.MediaFormat;
-import com.openclaw.agent.media.MediaTypes;
-import com.openclaw.agent.hooks.SoulEvil;
+import com.openclaw.media.MediaApply;
+import com.openclaw.media.MediaFormat;
+import com.openclaw.media.MediaTypes;
+import com.openclaw.hooks.SoulEvil;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.prompt.SystemPromptBuilder;

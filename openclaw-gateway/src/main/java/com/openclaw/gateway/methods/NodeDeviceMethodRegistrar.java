@@ -2,9 +2,9 @@ package com.openclaw.gateway.methods;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.openclaw.gateway.node.DevicePairingService;
-import com.openclaw.gateway.node.NodePairingService;
-import com.openclaw.gateway.node.NodeRegistry;
+import com.openclaw.node.DevicePairingService;
+import com.openclaw.node.NodePairingService;
+import com.openclaw.node.NodeRegistry;
 import com.openclaw.gateway.websocket.EventBroadcaster;
 import com.openclaw.gateway.websocket.GatewayConnection;
 import com.openclaw.gateway.websocket.GatewayMethodRouter;

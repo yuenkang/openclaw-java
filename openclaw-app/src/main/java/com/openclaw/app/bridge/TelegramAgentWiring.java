@@ -1,10 +1,10 @@
 package com.openclaw.app.bridge;
 
 import com.openclaw.app.commands.CommandProcessor;
-import com.openclaw.agent.autoreply.reply.GetReply;
-import com.openclaw.agent.hooks.BundledHookHandlers;
-import com.openclaw.agent.hooks.InternalHookRegistry;
-import com.openclaw.agent.media.MediaTypes;
+import com.openclaw.autoreply.reply.GetReply;
+import com.openclaw.hooks.BundledHookHandlers;
+import com.openclaw.hooks.InternalHookRegistry;
+import com.openclaw.media.MediaTypes;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.runtime.AgentRunner;

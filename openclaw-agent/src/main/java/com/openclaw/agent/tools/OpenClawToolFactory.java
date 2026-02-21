@@ -2,8 +2,8 @@ package com.openclaw.agent.tools;
 
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.tools.builtin.*;
-import com.openclaw.agent.tools.builtin.browser.BrowserClient;
 import com.openclaw.agent.tools.builtin.browser.BrowserTool;
+import com.openclaw.browser.BrowserClient;
 import com.openclaw.common.config.OpenClawConfig;
 import com.openclaw.common.config.PortDefaults;
 import lombok.Builder;

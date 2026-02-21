@@ -31,6 +31,14 @@
             <artifactId>openclaw-plugin</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-autoreply</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-browser</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>

@@ -3,6 +3,7 @@ package com.openclaw.gateway.websocket;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openclaw.gateway.protocol.ProtocolTypes.*;
+import com.openclaw.node.NodeConnection;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
@@ -22,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Slf4j
 @Getter
-public class GatewayConnection {
+public class GatewayConnection implements NodeConnection {
 
     private final String connectionId;
     private final WebSocketSession session;
@@ -59,6 +60,14 @@ public class GatewayConnection {
         this.session = session;
         this.connectedAt = System.currentTimeMillis();
         this.connectNonce = UUID.randomUUID().toString();
+    }
+
+    @Override
+    public String getClientId() {
+        if (connectParams != null && connectParams.getClient() != null) {
+            return connectParams.getClient().getId();
+        }
+        return null;
     }
 
     /**

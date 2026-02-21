@@ -20,8 +20,16 @@
 
     <modules>
         <module>openclaw-common</module>
+        <module>openclaw-node</module>
         <module>openclaw-gateway</module>
+        <module>openclaw-media</module>
+        <module>openclaw-sandbox</module>
+        <module>openclaw-memory</module>
+        <module>openclaw-providers</module>
+        <module>openclaw-hooks</module>
+        <module>openclaw-browser</module>
         <module>openclaw-agent</module>
+        <module>openclaw-autoreply</module>
         <module>openclaw-channel</module>
         <module>openclaw-plugin</module>
         <module>openclaw-app</module>
@@ -70,6 +78,46 @@
             <dependency>
                 <groupId>com.openclaw</groupId>
                 <artifactId>openclaw-plugin</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openclaw</groupId>
+                <artifactId>openclaw-autoreply</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openclaw</groupId>
+                <artifactId>openclaw-media</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openclaw</groupId>
+                <artifactId>openclaw-sandbox</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openclaw</groupId>
+                <artifactId>openclaw-memory</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openclaw</groupId>
+                <artifactId>openclaw-providers</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openclaw</groupId>
+                <artifactId>openclaw-hooks</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openclaw</groupId>
+                <artifactId>openclaw-browser</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openclaw</groupId>
+                <artifactId>openclaw-node</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

@@ -1,8 +1,8 @@
 package com.openclaw.app.bridge;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.openclaw.agent.hooks.BundledHookHandlers;
-import com.openclaw.agent.hooks.InternalHookRegistry;
+import com.openclaw.hooks.BundledHookHandlers;
+import com.openclaw.hooks.InternalHookRegistry;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.runtime.AgentRunner;

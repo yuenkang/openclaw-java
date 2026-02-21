@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.tools.AgentTool;
+import com.openclaw.browser.BrowserClient;
+import com.openclaw.browser.BrowserTypes;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -17,7 +19,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p>
  * Delegates all operations to {@link BrowserClient} via HTTP, which in turn
- * calls {@link com.openclaw.app.browser.BrowserControlController}.
+ * calls {@link com.openclaw.browser.BrowserControlServer}.
  * This enables multi-profile support — the LLM can pass a {@code profile}
  * parameter to target a specific browser profile.
  * </p>

@@ -27,6 +27,30 @@
             <artifactId>openclaw-plugin</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-media</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-sandbox</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-memory</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-providers</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-hooks</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-browser</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
         </dependency>

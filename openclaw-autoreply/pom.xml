@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.openclaw</groupId>
+        <artifactId>openclaw-java</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>openclaw-autoreply</artifactId>
+    <name>OpenClaw AutoReply</name>
+    <description>Auto-reply engine — message dispatch, chunking, directives, templates, and queue management</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-common</artifactId>
+        </dependency>
+    </dependencies>
+</project>

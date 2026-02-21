@@ -19,6 +19,10 @@
             <artifactId>openclaw-common</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.openclaw</groupId>
+            <artifactId>openclaw-node</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>

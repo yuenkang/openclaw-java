@@ -1,5 +1,72 @@
 # Changelog
 
+## Phase 49 — 模块提取 & 包名统一重构 (2026-02-22)
+
+### Verified
+
+- `mvn clean test` BUILD SUCCESS — **51 tests**, 0 failures, **15 模块** ✅
+
+### Added — openclaw-browser 模块 [NEW]
+
+从 `openclaw-agent` 和 `openclaw-app` 中提取浏览器基础设施代码为独立模块：
+
+| 类型 | 文件 | 说明 |
+|------|------|------|
+| **迁移** | `BrowserClient` | agent → browser |
+| **迁移** | `BrowserProfiles` | agent → browser |
+| **迁移** | `BrowserTypes` | agent → browser |
+| **迁移** | `PlaywrightSession` | agent → browser |
+| **迁移** | `BrowserControlServer` | app → browser |
+| **迁移** | `BrowserProfileService` | app → browser |
+| **迁移** | `BrowserProfilesTest` | agent test → browser test |
+
+依赖方向：`agent → browser → common`（无循环）
+
+### Added — openclaw-node 模块 [NEW]
+
+从 `openclaw-gateway` 中提取节点管理代码为独立模块，通过 `NodeConnection` 接口打断循环依赖：
+
+| 类型 | 文件 | 说明 |
+|------|------|------|
+| **NEW** | `NodeConnection` | 接口（`getConnectionId/getClientId/getClientIp/sendEvent`），解耦 node ↔ gateway |
+| **迁移** | `NodeRegistry` | gateway.node → node，改用 `NodeConnection` 接口 |
+| **迁移** | `NodePairingService` | gateway.node → node |
+| **迁移** | `DevicePairingService` | gateway.node → node |
+
+依赖方向：`common ← node ← gateway`（无循环）
+
+`GatewayConnection implements NodeConnection`，新增 `getClientId()` 方法。
+
+### Changed — 全量包名统一重构 (161+ 文件)
+
+将 6 个模块的包名从 `com.openclaw.agent.*` 统一为 `com.openclaw.<模块名>`：
+
+| 模块 | 旧包名 | 新包名 | 文件数 |
+|------|--------|--------|-------|
+| openclaw-providers | `com.openclaw.agent.providers` | `com.openclaw.providers` | 3 |
+| openclaw-memory | `com.openclaw.agent.memory` | `com.openclaw.memory` | 4 |
+| openclaw-media | `com.openclaw.agent.media` | `com.openclaw.media` | 11 |
+| openclaw-sandbox | `com.openclaw.agent.sandbox` | `com.openclaw.sandbox` | 12 |
+| openclaw-hooks | `com.openclaw.agent.hooks` | `com.openclaw.hooks` | 17 (含 6 测试) |
+| openclaw-autoreply | `com.openclaw.agent.autoreply` | `com.openclaw.autoreply` | 120 |
+| openclaw-browser | `com.openclaw.agent.tools.builtin.browser` / `com.openclaw.app.browser` | `com.openclaw.browser` | 7 (含 1 测试) |
+
+### Changed — 跨模块引用更新
+
+| 文件 | 说明 |
+|------|------|
+| `AgentRunner` | 更新 media/hooks import |
+| `AgentMethodRegistrar` | 更新 hooks import |
+| `TelegramAgentWiring` | 更新 autoreply/hooks/media import |
+| `SessionCommands` | 更新 autoreply import |
+| `InfoCommands` | 更新 autoreply import |
+| `BrowserTool` | 更新 browser import |
+| `OpenClawToolFactory` | 更新 browser import |
+| `GatewayBeanConfig` | 更新 node import |
+| `NodeDeviceMethodRegistrar` | 更新 node import |
+
+---
+
 ## Phase 48 — Plugin 激活链完整实现 & 死代码清理 (2026-02-21)
 
 ### Verified
