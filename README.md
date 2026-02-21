@@ -41,7 +41,7 @@ OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gatewa
 | `openclaw-gateway` | 117    | 4        | WebSocket 服务器、会话管理、方法路由、Cron 调度、出站消息投递、运行时重载、OpenAI 兼容 HTTP                         |
 | `openclaw-agent`   | 354    | 12       | Agent 执行引擎、多模型提供者 (Anthropic/OpenAI/Ollama)、内置工具 (Exec/File/Browser/Image)、指令处理、Hooks、Memory |
 | `openclaw-channel` | 104    | 9        | Telegram Bot (18+ 文件) + 微信公众号 (8 文件) + Discord 适配器、渠道注册、消息投递、出站适配器                      |
-| `openclaw-plugin`  | 5      | 0        | SPI 插件加载器、注册中心、清单解析                                                                                  |
+| `openclaw-plugin`  | 27     | 4        | 插件加载/激活/注册完整链、钩子执行器 (14 种)、命令处理器、工具解析、服务管理 — 📖 [plugin-guide.md](docs/plugin-guide.md)  |
 | `openclaw-app`     | 29     | 7        | Spring Boot 入口、命令系统 (15 个命令模块)、模块桥接、OpenAI 兼容 REST API、浏览器控制                              |
 
 **总计**: 703 个 Java 源文件 (~108k 行)，56 个测试文件 (~8k 行)，612 个测试用例
@@ -119,6 +119,7 @@ mvn test
 - **模型提供者**: Anthropic Claude、OpenAI GPT、Ollama 本地、OpenAI 兼容 (vLLM/DeepSeek 等)；认证工具: GitHub Copilot OAuth、通义千问 Portal OAuth
 - **内置工具**: 命令执行 (ExecTool)、文件读写 (FileTools)、浏览器控制 (BrowserTool)、图片分析 (ImageTool)
 - **Skills 系统**: 可扩展技能加载/过滤/注入、frontmatter 解析、环境变量覆盖、热重载 — 📖 [skills-guide.md](docs/skills-guide.md)
+- **Plugin 系统**: 插件工具/钩子/命令注入 Agent、热加载、classloader 隔离 — 📖 [plugin-guide.md](docs/plugin-guide.md)
 - **指令处理**: 快速回复、队列验证、Follow-up
 - **Hooks 系统**: 内置 Hook (boot-md/command-logger/session-memory)、Workspace Hook 加载、优先级管理
 - **Memory 系统**: 记忆索引、关键字搜索、后端配置
