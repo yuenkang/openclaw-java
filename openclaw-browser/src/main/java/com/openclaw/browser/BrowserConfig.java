@@ -39,6 +39,16 @@ public class BrowserConfig {
         private String defaultProfile;
         @Builder.Default
         private Map<String, ResolvedBrowserProfile> profiles = new LinkedHashMap<>();
+
+        /** Get the default profile object (convenience). */
+        public ResolvedBrowserProfile getDefaultProfileObj() {
+            return profiles.get(defaultProfile);
+        }
+
+        /** Get profiles as a List (convenience for iteration). */
+        public java.util.List<ResolvedBrowserProfile> getProfileList() {
+            return new java.util.ArrayList<>(profiles.values());
+        }
     }
 
     /**

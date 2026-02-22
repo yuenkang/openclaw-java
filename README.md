@@ -38,23 +38,22 @@ OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gatewa
 
 ## 模块说明
 
-
-| 模块 | 说明 |
-| --- | --- |
-| `openclaw-common` | 配置管理 (90+ 嵌套类型)、日志脱敏、安全审计、Markdown IR 解析/渲染、基础设施 (infra 16 模块) |
-| `openclaw-node` | 节点注册/配对/设备管理 (`NodeConnection` 接口解耦 gateway) |
-| `openclaw-gateway` | WebSocket 服务器、会话管理、方法路由、Cron 调度、出站消息投递、运行时重载、OpenAI 兼容 HTTP |
-| `openclaw-media` | 媒体理解框架：scope/format/resolve/provider/runner/apply |
-| `openclaw-sandbox` | 沙箱执行 (Docker)：配置解析/工具策略/运行时状态/清理 |
-| `openclaw-memory` | 记忆索引、关键字搜索、后端配置 |
-| `openclaw-providers` | 认证工具：GitHub Copilot OAuth、通义千问 Portal OAuth |
-| `openclaw-hooks` | Hooks 引擎/配置/安装/Frontmatter/SoulEvil |
-| `openclaw-browser` | 浏览器控制基础设施：Client/Profiles/Session/ControlServer |
-| `openclaw-plugin` | 插件加载/激活/注册完整链、钩子执行器 (14 种)、命令处理器、工具解析、服务管理 — 📖 [plugin-guide.md](docs/plugin-guide.md) |
-| `openclaw-agent` | Agent 执行引擎、多模型提供者 (Anthropic/OpenAI/Ollama)、内置工具 (Exec/File/Browser/Image)、指令处理、Skills |
-| `openclaw-autoreply` | 自动回复：命令检测/派发/回复队列/模板/心跳/状态 (120 文件) |
-| `openclaw-channel` | Telegram Bot (18+ 文件) + 微信公众号 (8 文件) + Discord 适配器 |
-| `openclaw-app` | Spring Boot 入口、命令系统 (15 个命令模块)、模块桥接、OpenAI 兼容 REST API |
+| 模块                 | 说明                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `openclaw-common`    | 配置管理 (90+ 嵌套类型)、日志脱敏、安全审计、Markdown IR 解析/渲染、基础设施 (infra 16 模块)                              |
+| `openclaw-node`      | 节点注册/配对/设备管理 (`NodeConnection` 接口解耦 gateway)                                                                |
+| `openclaw-gateway`   | WebSocket 服务器、会话管理、方法路由、Cron 调度、出站消息投递、运行时重载、OpenAI 兼容 HTTP                               |
+| `openclaw-media`     | 媒体理解框架：scope/format/resolve/provider/runner/apply                                                                  |
+| `openclaw-sandbox`   | 沙箱执行 (Docker)：配置解析/工具策略/运行时状态/清理                                                                      |
+| `openclaw-memory`    | 记忆索引、关键字搜索、后端配置                                                                                            |
+| `openclaw-providers` | 认证工具：GitHub Copilot OAuth、通义千问 Portal OAuth                                                                     |
+| `openclaw-hooks`     | Hooks 引擎/配置/安装/Frontmatter/SoulEvil                                                                                 |
+| `openclaw-browser`   | 浏览器控制基础设施：Client/Profiles/Session/ControlServer                                                                 |
+| `openclaw-plugin`    | 插件加载/激活/注册完整链、钩子执行器 (14 种)、命令处理器、工具解析、服务管理 — 📖 [plugin-guide.md](docs/plugin-guide.md) |
+| `openclaw-agent`     | Agent 执行引擎、多模型提供者 (Anthropic/OpenAI/Ollama)、内置工具 (Exec/File/Browser/Image)、指令处理、Skills              |
+| `openclaw-autoreply` | 自动回复：命令检测/派发/回复队列/模板/心跳/状态 (120 文件)                                                                |
+| `openclaw-channel`   | Telegram Bot (18+ 文件) + 微信公众号 (8 文件) + Discord 适配器                                                            |
+| `openclaw-app`       | Spring Boot 入口、命令系统 (15 个命令模块)、模块桥接、OpenAI 兼容 REST API                                                |
 
 **总计**: 15 模块，~700+ 个 Java 源文件 (~108k 行)
 
@@ -88,18 +87,17 @@ mvn spring-boot:run -pl openclaw-app
 
 ### 环境变量
 
-
 | 变量                 | 说明                 | 默认值                         |
 | -------------------- | -------------------- | ------------------------------ |
-| `ANTHROPIC_API_KEY`  | Anthropic API 密钥   | —                             |
+| `ANTHROPIC_API_KEY`  | Anthropic API 密钥   | —                              |
 | `ANTHROPIC_BASE_URL` | Anthropic API 地址   | `https://api.anthropic.com/v1` |
-| `OPENAI_API_KEY`     | OpenAI API 密钥      | —                             |
+| `OPENAI_API_KEY`     | OpenAI API 密钥      | —                              |
 | `OPENAI_BASE_URL`    | OpenAI API 地址      | `https://api.openai.com/v1`    |
 | `OLLAMA_BASE_URL`    | Ollama 本地服务地址  | `http://127.0.0.1:11434/v1`    |
-| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token   | —                             |
-| `WECHAT_APP_ID`      | 微信公众号 AppID     | —                             |
-| `WECHAT_APP_SECRET`  | 微信公众号 AppSecret | —                             |
-| `WECHAT_TOKEN`       | 微信公众号验证 Token | —                             |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token   | —                              |
+| `WECHAT_APP_ID`      | 微信公众号 AppID     | —                              |
+| `WECHAT_APP_SECRET`  | 微信公众号 AppSecret | —                              |
+| `WECHAT_TOKEN`       | 微信公众号验证 Token | —                              |
 
 ### 测试
 
@@ -111,9 +109,8 @@ mvn test
 
 采用自定义帧协议（与 TypeScript 版本对齐），**非 JSON-RPC**。支持三步握手、双向通信和事件推送。
 
-
-| 类型     | 格式                                                    | 说明                   |
-| -------- | ------------------------------------------------------- | ---------------------- |
+| 类型     | 格式                                                    | 说明                  |
+| -------- | ------------------------------------------------------- | --------------------- |
 | Request  | `{"type":"req", "id":"1", "method":"...", "params":{}}` | 客户端→服务端请求     |
 | Response | `{"type":"res", "id":"1", "ok":true, "payload":{}}`     | 服务端→客户端响应     |
 | Event    | `{"type":"event", "event":"...", "payload":{}}`         | 服务端→客户端事件推送 |
@@ -193,13 +190,16 @@ mvn test
 
 📖 渠道配置总览：[channel-configuration.md](docs/channel-configuration.md)
 
-### 浏览器控制 (`openclaw-app/browser`)
+### 浏览器控制 (`openclaw-browser`)
 
 - **独立 Netty HTTP 服务器** (端口 18791) -- 与 TypeScript 架构对齐
 - 15 种浏览器操作 (status/start/stop/tabs/snapshot/act 等)
 - **截图视觉分析** -- 截图自动作为图片发送给 LLM，LLM 可看到页面内容并分析
+- **CDP + Playwright 双通道架构** -- 截图/快照走 CDP 低延迟通道，交互走 Playwright auto-wait
 - 支持有头/无头模式切换 (`headless` 参数)
 - OkHttp HTTP 客户端调用浏览器控制服务器
+
+📖 浏览器模块指南：[browser-guide.md](docs/browser-guide.md)
 
 ### 持久化层
 
@@ -319,38 +319,37 @@ openclaw-java/
 
 ## 开发迭代历程
 
-
-| Phase  | 内容                                                   | 文件数 |
-| ------ | ------------------------------------------------------ | ------ |
-| 1–3   | 基础框架 + Gateway + Agent Runtime                     | 24     |
-| 4–6   | 渠道适配器 + 插件/Cron + 测试                          | 18     |
-| 7–12  | Agent 高级功能 (指令处理/Follow-up/模型扩展)           | ~80    |
-| 13–18 | Gateway 扩展 (会话/RPC/聊天/运行时)                    | ~90    |
-| 19–23 | Agent 深度 (工具链/Auth/CLI/系统提示)                  | ~120   |
-| 24     | 编译错误全面修复                                       | 22     |
-| 24.5   | Media + Memory 基础设施                                | 8      |
-| 25     | Hooks/Plugins/Cron 模块补齐                            | 9      |
-| 26     | Gateway 运行时补全                                     | 11     |
-| 27     | Infra 出站消息投递                                     | 15     |
-| 28     | Cron + Hooks 补全                                      | 6      |
-| 29     | Telegram Bot 完整层                                    | 18     |
-| 30     | Channels 桥接层                                        | 5      |
-| 31     | 微信公众号渠道                                         | 8      |
-| 32     | 集成测试 + WebSocket 可靠性修复                        | —     |
-| 33     | 浏览器控制 + 图片处理 + 持久化 + 用量追踪              | 10+    |
-| 34     | infra/ 核心基础设施模块 (重试/安全/事件/运行时)        | 21     |
-| 35     | Browser Control Netty 独立服务 + 截图多模态 LLM 支持   | 8      |
-| 35.1   | TUI 修复 (流式/token/模型名/session) + TUI 文档        | 10     |
-| 36     | 日志脱敏 · 安全审计 · Markdown IR · Providers 扩展  | 34     |
-| 37     | 命令系统重构 · 访问控制对齐 · 配置热加载 · 群组策略 | 25     |
-| 38–42 | Telegram 完善 · WeChat · 端到端测试 · 编译修复       | ~30    |
-| 43     | infra/ 补齐 (16 模块: dotenv/binaries/restart 等)    | 16     |
-| 43.5   | InfraBootstrap 接入主流程                            | 3      |
-| 44     | 命令系统深化 (/status /doctor /restart 接入 infra)   | 4      |
-| 45     | 测试覆盖率提升 (9 新测试文件, 612 pass)              | 9      |
-| 46     | 运行时增强与可观测性 (RuntimeMetrics/HealthEndpoint) | 7      |
-| 47–48  | Plugin 激活链完整实现 & 死代码清理                   | ~15    |
-| 49     | 模块提取 (browser/node) & 全量包名统一重构 (161+文件) | 15     |
+| Phase | 内容                                                  | 文件数 |
+| ----- | ----------------------------------------------------- | ------ |
+| 1–3   | 基础框架 + Gateway + Agent Runtime                    | 24     |
+| 4–6   | 渠道适配器 + 插件/Cron + 测试                         | 18     |
+| 7–12  | Agent 高级功能 (指令处理/Follow-up/模型扩展)          | ~80    |
+| 13–18 | Gateway 扩展 (会话/RPC/聊天/运行时)                   | ~90    |
+| 19–23 | Agent 深度 (工具链/Auth/CLI/系统提示)                 | ~120   |
+| 24    | 编译错误全面修复                                      | 22     |
+| 24.5  | Media + Memory 基础设施                               | 8      |
+| 25    | Hooks/Plugins/Cron 模块补齐                           | 9      |
+| 26    | Gateway 运行时补全                                    | 11     |
+| 27    | Infra 出站消息投递                                    | 15     |
+| 28    | Cron + Hooks 补全                                     | 6      |
+| 29    | Telegram Bot 完整层                                   | 18     |
+| 30    | Channels 桥接层                                       | 5      |
+| 31    | 微信公众号渠道                                        | 8      |
+| 32    | 集成测试 + WebSocket 可靠性修复                       | —      |
+| 33    | 浏览器控制 + 图片处理 + 持久化 + 用量追踪             | 10+    |
+| 34    | infra/ 核心基础设施模块 (重试/安全/事件/运行时)       | 21     |
+| 35    | Browser Control Netty 独立服务 + 截图多模态 LLM 支持  | 8      |
+| 35.1  | TUI 修复 (流式/token/模型名/session) + TUI 文档       | 10     |
+| 36    | 日志脱敏 · 安全审计 · Markdown IR · Providers 扩展    | 34     |
+| 37    | 命令系统重构 · 访问控制对齐 · 配置热加载 · 群组策略   | 25     |
+| 38–42 | Telegram 完善 · WeChat · 端到端测试 · 编译修复        | ~30    |
+| 43    | infra/ 补齐 (16 模块: dotenv/binaries/restart 等)     | 16     |
+| 43.5  | InfraBootstrap 接入主流程                             | 3      |
+| 44    | 命令系统深化 (/status /doctor /restart 接入 infra)    | 4      |
+| 45    | 测试覆盖率提升 (9 新测试文件, 612 pass)               | 9      |
+| 46    | 运行时增强与可观测性 (RuntimeMetrics/HealthEndpoint)  | 7      |
+| 47–48 | Plugin 激活链完整实现 & 死代码清理                    | ~15    |
+| 49    | 模块提取 (browser/node) & 全量包名统一重构 (161+文件) | 15     |
 
 ## License
 

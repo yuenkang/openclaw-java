@@ -2,6 +2,7 @@ package com.openclaw.browser;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openclaw.browser.server.DualChannelBridge;
 import com.openclaw.common.config.PortDefaults;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
@@ -41,6 +43,9 @@ public class BrowserControlServer {
     private EventLoopGroup workerGroup;
     private Channel serverChannel;
     private boolean headless = false;
+
+    /** Per-profile dual-channel bridges (profile name → bridge). */
+    private final ConcurrentHashMap<String, DualChannelBridge> bridges = new ConcurrentHashMap<>();
 
     public BrowserControlServer(BrowserProfileService profileService) {
         this.profileService = profileService;
@@ -189,6 +194,11 @@ public class BrowserControlServer {
                 return handleConsole(decoder, profile);
             }
 
+            // GET /channels — dual-channel status
+            if ("/channels".equals(path) && method == HttpMethod.GET) {
+                return handleChannels(profile);
+            }
+
             // POST /pdf
             if ("/pdf".equals(path)) {
                 throw new BadRequestException("PDF export not yet implemented");
@@ -219,12 +229,16 @@ public class BrowserControlServer {
         private Object handleStart(FullHttpRequest request, String profile) {
             Map<String, Object> reqBody = readBody(request);
             PlaywrightSession session = profileService.getOrCreateSession(profile);
+            String resolvedName = profileService.resolveProfileName(profile);
 
             if (session.isRunning()) {
+                // Ensure bridge exists for already-running session
+                ensureBridge(resolvedName, session);
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("ok", true);
-                result.put("profile", profileService.resolveProfileName(profile));
+                result.put("profile", resolvedName);
                 result.put("message", "already running");
+                result.put("channels", getBridgeInfo(resolvedName));
                 return result;
             }
 
@@ -239,9 +253,19 @@ public class BrowserControlServer {
                 session.launch(headless);
             }
 
+            // Discover CDP direct channel after browser start
+            DualChannelBridge bridge = ensureBridge(resolvedName, session);
+            if (cdpUrl != null && !cdpUrl.isBlank()) {
+                bridge.discoverCdp(cdpUrl);
+            } else {
+                // For launched browser, try default CDP port
+                bridge.discoverCdp("http://127.0.0.1:9222");
+            }
+
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("ok", true);
-            result.put("profile", profileService.resolveProfileName(profile));
+            result.put("profile", resolvedName);
+            result.put("channels", getBridgeInfo(resolvedName));
             return result;
         }
 
@@ -366,22 +390,50 @@ public class BrowserControlServer {
         private Object handleSnapshot(QueryStringDecoder decoder, String profile) {
             String targetId = firstParam(decoder, "targetId");
             PlaywrightSession session = ensureBrowserStarted(profile);
-            PlaywrightSession.SnapshotResult snap = session.snapshot(targetId);
+            String resolvedName = profileService.resolveProfileName(profile);
+            DualChannelBridge bridge = bridges.get(resolvedName);
+
+            PlaywrightSession.SnapshotResult snap;
+            String channel;
+            if (bridge != null && bridge.isCdpAvailable()) {
+                snap = bridge.snapshotDual(targetId);
+                channel = "cdp";
+            } else {
+                snap = session.snapshot(targetId);
+                channel = "playwright";
+            }
+
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("ok", true);
             result.put("format", "aria");
             result.put("snapshot", snap.getSnapshot());
             result.put("url", snap.getUrl());
             result.put("title", snap.getTitle());
+            result.put("channel", channel);
             return result;
         }
 
         private Object handleScreenshot(FullHttpRequest request, String profile) {
             Map<String, Object> reqBody = readBody(request);
             PlaywrightSession session = ensureBrowserStarted(profile);
+            String resolvedName = profileService.resolveProfileName(profile);
             String targetId = reqBody != null ? (String) reqBody.get("targetId") : null;
             boolean fullPage = reqBody != null && Boolean.TRUE.equals(reqBody.get("fullPage"));
-            PlaywrightSession.ScreenshotResult shot = session.screenshot(targetId, fullPage);
+            String ref = reqBody != null ? (String) reqBody.get("ref") : null;
+            String element = reqBody != null ? (String) reqBody.get("element") : null;
+
+            PlaywrightSession.ScreenshotResult shot;
+            String channel;
+            DualChannelBridge bridge = bridges.get(resolvedName);
+            if (bridge != null) {
+                shot = bridge.screenshotDual(targetId, fullPage, ref, element);
+                channel = bridge.isCdpAvailable() && ref == null && element == null && !fullPage
+                        ? "cdp" : "playwright";
+            } else {
+                shot = session.screenshot(targetId, fullPage);
+                channel = "playwright";
+            }
+
             String base64 = Base64.getEncoder().encodeToString(shot.getBuffer());
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("ok", true);
@@ -389,6 +441,7 @@ public class BrowserControlServer {
             result.put("contentType", shot.getContentType());
             result.put("url", shot.getUrl());
             result.put("title", shot.getTitle());
+            result.put("channel", channel);
             return result;
         }
 
@@ -427,8 +480,41 @@ public class BrowserControlServer {
             PlaywrightSession session = profileService.getOrCreateSession(profile);
             if (!session.isRunning()) {
                 session.launch(headless);
+                // Discover CDP on first launch
+                String resolvedName = profileService.resolveProfileName(profile);
+                DualChannelBridge bridge = ensureBridge(resolvedName, session);
+                bridge.discoverCdp("http://127.0.0.1:9222");
             }
             return session;
+        }
+
+        private Object handleChannels(String profile) {
+            String resolvedName = profileService.resolveProfileName(profile);
+            DualChannelBridge bridge = bridges.get(resolvedName);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("ok", true);
+            result.put("profile", resolvedName);
+            if (bridge != null) {
+                result.put("channels", bridge.getChannelInfo());
+            } else {
+                result.put("channels", Map.of(
+                        "playwright", profileService.isRunning(profile),
+                        "cdpDirect", false));
+            }
+            return result;
+        }
+
+        private DualChannelBridge ensureBridge(String resolvedName, PlaywrightSession session) {
+            return bridges.computeIfAbsent(resolvedName,
+                    k -> new DualChannelBridge(session));
+        }
+
+        private Map<String, Object> getBridgeInfo(String resolvedName) {
+            DualChannelBridge bridge = bridges.get(resolvedName);
+            if (bridge != null) {
+                return bridge.getChannelInfo();
+            }
+            return Map.of("playwright", true, "cdpDirect", false);
         }
 
         private Map<String, Object> tabToMap(PlaywrightSession.TabInfo tab) {

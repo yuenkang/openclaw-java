@@ -476,7 +476,7 @@ public class PlaywrightSession implements AutoCloseable {
         }
     }
 
-    private Page resolveTargetPage(String targetId) {
+    public Page resolveTargetPage(String targetId) {
         ensureContext();
         if (targetId != null && !targetId.isBlank()) {
             Page page = findPage(targetId);
