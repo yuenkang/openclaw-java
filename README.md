@@ -2,7 +2,7 @@
 
 OpenClaw 的 Java 全栈实现 —— 基于 Spring Boot 3.3 的 AI Agent Gateway，通过 WebSocket 自定义帧协议（req/res/event）提供全功能 Agent 接口。
 
-> **当前进度**: Phase 49 / 15 模块 / ~108k 行 Java 代码
+> **当前进度**: Phase 51 / 15 模块 / ~108k 行 Java 代码
 
 📊 [Java vs TypeScript 进度对比](docs/java-vs-typescript.md)
 
@@ -193,11 +193,15 @@ mvn test
 ### 浏览器控制 (`openclaw-browser`)
 
 - **独立 Netty HTTP 服务器** (端口 18791) -- 与 TypeScript 架构对齐
-- 15 种浏览器操作 (status/start/stop/tabs/snapshot/act 等)
+- **19 种浏览器操作** (click/type/fill/press/drag/wait/evaluate/download/set_input_files/response_body 等)
+- **CDP + Playwright 1.58 双通道架构** -- 截图/快照走 CDP 低延迟通道，交互走 Playwright auto-wait
 - **截图视觉分析** -- 截图自动作为图片发送给 LLM，LLM 可看到页面内容并分析
-- **CDP + Playwright 双通道架构** -- 截图/快照走 CDP 低延迟通道，交互走 Playwright auto-wait
+- **带标注截图** (`/screenshot-labels`) -- 给交互元素加编号标注，便于 LLM 定位
+- **快照截断** (`/snapshot?maxChars=N`) -- 超大页面自动截断
+- **响应体捕获** (`/response/body`) -- 拦截并返回匹配 URL 的请求响应体
+- **文件上传/对话框预注册** (`arm-upload`/`arm-dialog`) -- 异步事件处理
 - 支持有头/无头模式切换 (`headless` 参数)
-- OkHttp HTTP 客户端调用浏览器控制服务器
+- HTTP 路由拆分为 6 个独立路由类 (Basic/Snapshot/Tab/Hooks/State/Routes)
 
 📖 浏览器模块指南：[browser-guide.md](docs/browser-guide.md)
 
@@ -274,7 +278,7 @@ mvn test
 ```
 openclaw-java/
 ├── pom.xml                     # 父 POM (Spring Boot 3.3, Java 17)
-├── CHANGELOG.md                # 变更日志 (Phase 1-49)
+├── CHANGELOG.md                # 变更日志 (Phase 1-51)
 ├── README.md                   # 本文件
 ├── doc/                        # 设计文档 + 学习路线图
 │   ├── notes/                  # 16 篇架构学习笔记
@@ -350,6 +354,8 @@ openclaw-java/
 | 46    | 运行时增强与可观测性 (RuntimeMetrics/HealthEndpoint)  | 7      |
 | 47–48 | Plugin 激活链完整实现 & 死代码清理                    | ~15    |
 | 49    | 模块提取 (browser/node) & 全量包名统一重构 (161+文件) | 15     |
+| 50    | Browser & Node 模块功能完善 (78 tests)                | ~30    |
+| 51    | Browser 双通道架构 + TS 对齐 (Playwright 1.58)        | ~40    |
 
 ## License
 

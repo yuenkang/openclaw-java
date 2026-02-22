@@ -88,7 +88,7 @@ public class DualChannelBridge {
             try {
                 byte[] data = CdpOperations.captureScreenshotPng(cdpWsUrl, false);
                 if (data != null && data.length > 0) {
-                    byte[] normalized = ScreenshotNormalizer.normalize(data);
+                    byte[] normalized = ScreenshotNormalizer.normalizeToBytes(data);
                     Page page = safeResolvePage(targetId);
                     return new PlaywrightSession.ScreenshotResult(
                             normalized,
@@ -106,7 +106,7 @@ public class DualChannelBridge {
         PlaywrightSession.ScreenshotResult shot = playwrightSession.screenshot(
                 targetId, fullPage, ref, element);
         if (shot != null && shot.getBuffer() != null) {
-            byte[] normalized = ScreenshotNormalizer.normalize(shot.getBuffer());
+            byte[] normalized = ScreenshotNormalizer.normalizeToBytes(shot.getBuffer());
             return new PlaywrightSession.ScreenshotResult(
                     normalized, shot.getUrl(), shot.getTitle(), shot.getContentType());
         }

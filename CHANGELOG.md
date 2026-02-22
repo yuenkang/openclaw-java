@@ -1,5 +1,52 @@
 # Changelog
 
+## Phase 51.1 — Browser 功能深度对齐 TS 版本 (2026-02-22)
+
+### Verified
+
+- `mvn clean test -pl openclaw-browser` BUILD SUCCESS — **28 tests**, 0 failures ✅
+
+### Changed — Playwright 升级
+
+- `playwright.version` **1.50.0 → 1.58.0**（最新版）
+
+### Added — PlaywrightSession act() 新增操作
+
+| 操作              | 说明                                |
+| ----------------- | ----------------------------------- |
+| `set_input_files` | 文件上传 (`Locator.setInputFiles`)  |
+| `set_locale`      | CDP `Emulation.setLocaleOverride`   |
+| `set_timezone`    | CDP `Emulation.setTimezoneOverride` |
+| `set_device`      | CDP 设备模拟 (viewport + UA)        |
+| `response_body`   | 拦截匹配 URL 的响应体               |
+
+### Added — HTTP 路由
+
+| 路由                | 方法 | 处理类        |
+| ------------------- | ---- | ------------- |
+| `/hooks/arm-upload` | POST | `HooksRoutes` |
+| `/hooks/arm-dialog` | POST | `HooksRoutes` |
+| `/response/body`    | POST | `HooksRoutes` |
+
+### Added — BrowserClient 方法
+
+| 方法                 | 说明               |
+| -------------------- | ------------------ |
+| `screenshotLabels()` | 带标注截图         |
+| `responseBody()`     | 捕获响应体         |
+| `armUpload()`        | 预注册文件上传处理 |
+| `armDialogHandler()` | 预注册对话框处理   |
+
+### Changed — 快照截断集成
+
+- `SnapshotRoutes.handleSnapshot` — 新增 `maxChars` 查询参数，调用 `AiSnapshotFormatter.truncate()` 截断超大页面
+
+### Deleted — 孤立类清理
+
+- `ScreenshotLabeler.java` — 功能已内联在 `PlaywrightSession.screenshotWithLabels()` (使用 `boundingBox` 精确定位)
+
+---
+
 ## Phase 51 — Browser 双通道架构实现 + 接线 (2026-02-22)
 
 ### Batch 1: CDP 直连层

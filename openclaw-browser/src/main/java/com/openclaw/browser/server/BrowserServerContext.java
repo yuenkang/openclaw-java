@@ -150,6 +150,121 @@ public class BrowserServerContext implements AutoCloseable {
         return def != null ? def.getName() : "default";
     }
 
+    // ==================== Health Checks ====================
+
+    /**
+     * Check if the Chrome instance for a profile is reachable via WebSocket.
+     */
+    public boolean isReachable(String profileName, int timeoutMs) {
+        RunningChrome chrome = chromeInstances.get(profileName);
+        if (chrome == null || !chrome.isAlive()) return false;
+        String cdpUrl = chrome.getCdpUrl();
+        if (cdpUrl == null) return false;
+        // Try to connect via HTTP to the /json/version endpoint
+        return isHttpReachable(profileName, timeoutMs);
+    }
+
+    /**
+     * Check if Chrome is reachable via HTTP to the debugger endpoint.
+     */
+    public boolean isHttpReachable(String profileName, int timeoutMs) {
+        RunningChrome chrome = chromeInstances.get(profileName);
+        if (chrome == null) return false;
+        String cdpUrl = chrome.getCdpUrl();
+        if (cdpUrl == null) return false;
+        try {
+            // Extract host/port from ws:// URL
+            String httpUrl = cdpUrl.replace("ws://", "http://")
+                    .replaceAll("/devtools.*", "/json/version");
+            java.net.URL url = java.net.URI.create(httpUrl).toURL();
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(timeoutMs > 0 ? timeoutMs : 1500);
+            conn.setReadTimeout(timeoutMs > 0 ? timeoutMs : 1500);
+            conn.setRequestMethod("GET");
+            int status = conn.getResponseCode();
+            conn.disconnect();
+            return status == 200;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // ==================== Profile Status ====================
+
+    /**
+     * Profile runtime status for listing.
+     */
+    public record ProfileStatus(
+            String name,
+            boolean running,
+            String cdpUrl,
+            boolean connected
+    ) {}
+
+    /**
+     * List all profiles with their runtime status.
+     */
+    public java.util.List<ProfileStatus> listProfiles() {
+        java.util.List<ProfileStatus> result = new java.util.ArrayList<>();
+        if (config.getProfiles() != null) {
+            for (var entry : config.getProfiles().entrySet()) {
+                String name = entry.getKey();
+                result.add(getProfileStatus(name));
+            }
+        } else {
+            // Only default profile
+            result.add(getProfileStatus(getDefaultProfileName()));
+        }
+        return result;
+    }
+
+    /**
+     * Get the runtime status of a specific profile.
+     */
+    public ProfileStatus getProfileStatus(String profileName) {
+        RunningChrome chrome = chromeInstances.get(profileName);
+        PlaywrightSession session = playwrightSessions.get(profileName);
+        boolean running = chrome != null && chrome.isAlive();
+        String cdpUrl = chrome != null ? chrome.getCdpUrl() : null;
+        boolean connected = session != null && session.isConnected();
+        return new ProfileStatus(profileName, running, cdpUrl, connected);
+    }
+
+    // ==================== Reset ====================
+
+    /**
+     * Reset a profile: stop Chrome, close Playwright session, and optionally clean profile data.
+     */
+    public void resetProfile(String profileName, boolean cleanData) throws Exception {
+        // Close Playwright first
+        closePlaywrightSession(profileName);
+        // Stop relay
+        stopRelay(profileName);
+        // Stop Chrome
+        stopChrome(profileName);
+        // Optionally clean profile data directory
+        if (cleanData) {
+            RunningChrome chrome = chromeInstances.get(profileName);
+            if (chrome != null) {
+                String userDataDir = chrome.getUserDataDir();
+                if (userDataDir != null) {
+                    java.nio.file.Path profileDir = java.nio.file.Path.of(userDataDir);
+                    if (java.nio.file.Files.exists(profileDir)) {
+                        log.info("Cleaning profile data: {}", profileDir);
+                        try (var stream = java.nio.file.Files.walk(profileDir)) {
+                            stream.sorted(java.util.Comparator.reverseOrder())
+                                    .filter(p -> !p.equals(profileDir))
+                                    .forEach(p -> {
+                                        try { java.nio.file.Files.deleteIfExists(p); } catch (Exception ignored) {}
+                                    });
+                        }
+                    }
+                }
+            }
+        }
+        log.info("Profile '{}' reset (cleanData={})", profileName, cleanData);
+    }
+
     // ==================== Lifecycle ====================
 
     @Override

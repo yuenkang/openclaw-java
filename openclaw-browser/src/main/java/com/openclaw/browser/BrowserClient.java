@@ -220,6 +220,226 @@ public class BrowserClient {
         return post("/tabs/action", null, body, JsonNode.class);
     }
 
+    // ===== Cookies =====
+
+    /** GET /cookies — get cookies */
+    public JsonNode cookies(String targetId, String profile) throws IOException {
+        Map<String, String> query = new LinkedHashMap<>();
+        if (targetId != null) query.put("targetId", targetId);
+        if (profile != null) query.put("profile", profile);
+        return get("/cookies", query, JsonNode.class);
+    }
+
+    /** POST /cookies — set a cookie */
+    public JsonNode cookiesSet(Map<String, Object> cookie, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("cookie", cookie);
+        if (profile != null) body.put("profile", profile);
+        return post("/cookies", null, body, JsonNode.class);
+    }
+
+    /** DELETE /cookies — clear cookies */
+    public void cookiesClear(String profile) throws IOException {
+        delete("/cookies", profileQuery(profile));
+    }
+
+    // ===== Storage =====
+
+    /** GET /storage — get storage entries */
+    public JsonNode storageGet(String kind, String key, String targetId, String profile)
+            throws IOException {
+        Map<String, String> query = new LinkedHashMap<>();
+        if (kind != null) query.put("kind", kind);
+        if (key != null) query.put("key", key);
+        if (targetId != null) query.put("targetId", targetId);
+        if (profile != null) query.put("profile", profile);
+        return get("/storage", query, JsonNode.class);
+    }
+
+    /** POST /storage — set a storage entry */
+    public JsonNode storageSet(String kind, String key, String value, String profile)
+            throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("kind", kind != null ? kind : "local");
+        body.put("key", key);
+        body.put("value", value);
+        if (profile != null) body.put("profile", profile);
+        return post("/storage", null, body, JsonNode.class);
+    }
+
+    /** DELETE /storage — clear storage */
+    public void storageClear(String kind, String profile) throws IOException {
+        Map<String, String> query = new LinkedHashMap<>();
+        if (kind != null) query.put("kind", kind);
+        if (profile != null) query.put("profile", profile);
+        delete("/storage", query);
+    }
+
+    // ===== Observe =====
+
+    /** GET /errors — get page errors */
+    public JsonNode pageErrors(String targetId, String profile) throws IOException {
+        Map<String, String> query = new LinkedHashMap<>();
+        if (targetId != null) query.put("targetId", targetId);
+        if (profile != null) query.put("profile", profile);
+        return get("/errors", query, JsonNode.class);
+    }
+
+    /** GET /requests — get network requests */
+    public JsonNode requests(String targetId, String filter, String profile) throws IOException {
+        Map<String, String> query = new LinkedHashMap<>();
+        if (targetId != null) query.put("targetId", targetId);
+        if (filter != null) query.put("filter", filter);
+        if (profile != null) query.put("profile", profile);
+        return get("/requests", query, JsonNode.class);
+    }
+
+    /** POST /highlight — highlight element */
+    public JsonNode highlight(String ref, String targetId, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("ref", ref);
+        if (targetId != null) body.put("targetId", targetId);
+        if (profile != null) body.put("profile", profile);
+        return post("/highlight", null, body, JsonNode.class);
+    }
+
+    // ===== Trace =====
+
+    /** POST /trace/start — start tracing */
+    public JsonNode traceStart(boolean screenshots, boolean snapshots, String profile)
+            throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("screenshots", screenshots);
+        body.put("snapshots", snapshots);
+        if (profile != null) body.put("profile", profile);
+        return post("/trace/start", null, body, JsonNode.class);
+    }
+
+    /** POST /trace/stop — stop tracing */
+    public JsonNode traceStop(String path, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (path != null) body.put("path", path);
+        if (profile != null) body.put("profile", profile);
+        return post("/trace/stop", null, body, JsonNode.class);
+    }
+
+    // ===== State =====
+
+    /** POST /state/offline — set offline mode */
+    public JsonNode setOffline(boolean offline, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("offline", offline);
+        if (profile != null) body.put("profile", profile);
+        return post("/state/offline", null, body, JsonNode.class);
+    }
+
+    /** POST /state/headers — set extra HTTP headers */
+    public JsonNode setHeaders(Map<String, String> headers, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("headers", headers);
+        if (profile != null) body.put("profile", profile);
+        return post("/state/headers", null, body, JsonNode.class);
+    }
+
+    /** POST /state/credentials — set HTTP credentials */
+    public JsonNode setHttpCredentials(String username, String password, boolean clear,
+                                       String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (clear) body.put("clear", true);
+        else {
+            body.put("username", username);
+            body.put("password", password);
+        }
+        if (profile != null) body.put("profile", profile);
+        return post("/state/credentials", null, body, JsonNode.class);
+    }
+
+    /** POST /state/geolocation — set geolocation */
+    public JsonNode setGeolocation(Double latitude, Double longitude, Double accuracy,
+                                    boolean clear, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (clear) body.put("clear", true);
+        else {
+            body.put("latitude", latitude);
+            body.put("longitude", longitude);
+            if (accuracy != null) body.put("accuracy", accuracy);
+        }
+        if (profile != null) body.put("profile", profile);
+        return post("/state/geolocation", null, body, JsonNode.class);
+    }
+
+    /** POST /state/media — emulate media */
+    public JsonNode setMedia(String colorScheme, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("colorScheme", colorScheme);
+        if (profile != null) body.put("profile", profile);
+        return post("/state/media", null, body, JsonNode.class);
+    }
+
+    // ===== Resize =====
+
+    /** POST /resize — resize viewport */
+    public JsonNode resize(int width, int height, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("width", width);
+        body.put("height", height);
+        if (profile != null) body.put("profile", profile);
+        return post("/resize", null, body, JsonNode.class);
+    }
+
+    // ===== Channels =====
+
+    /** GET /channels — dual-channel status */
+    public JsonNode channels(String profile) throws IOException {
+        return get("/channels", profileQuery(profile), JsonNode.class);
+    }
+
+    // ===== Screenshot Labels =====
+
+    /** POST /screenshot-labels — screenshot with labeled interactive elements */
+    public JsonNode screenshotLabels(String targetId, int maxLabels, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (targetId != null) body.put("targetId", targetId);
+        body.put("maxLabels", maxLabels);
+        return post("/screenshot-labels", profileQuery(profile), body, JsonNode.class);
+    }
+
+    // ===== Response Body =====
+
+    /** POST /response/body — capture response body matching URL pattern */
+    public JsonNode responseBody(String url, String targetId, Integer timeoutMs,
+                                  Integer maxChars, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("url", url);
+        if (targetId != null) body.put("targetId", targetId);
+        if (timeoutMs != null) body.put("timeoutMs", timeoutMs);
+        if (maxChars != null) body.put("maxChars", maxChars);
+        return post("/response/body", profileQuery(profile), body, JsonNode.class);
+    }
+
+    // ===== Arm Upload / Dialog =====
+
+    /** POST /hooks/arm-upload — arm file upload (pre-register file chooser handler) */
+    public JsonNode armUpload(List<String> paths, String targetId, Integer timeoutMs,
+                               String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (paths != null) body.put("paths", paths);
+        if (targetId != null) body.put("targetId", targetId);
+        if (timeoutMs != null) body.put("timeoutMs", timeoutMs);
+        return post("/hooks/arm-upload", profileQuery(profile), body, JsonNode.class);
+    }
+
+    /** POST /hooks/arm-dialog — arm dialog handler (pre-register accept/dismiss) */
+    public JsonNode armDialogHandler(boolean accept, String promptText, String targetId,
+                                      Integer timeoutMs, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("accept", accept);
+        if (promptText != null) body.put("promptText", promptText);
+        if (targetId != null) body.put("targetId", targetId);
+        if (timeoutMs != null) body.put("timeoutMs", timeoutMs);
+        return post("/hooks/arm-dialog", profileQuery(profile), body, JsonNode.class);
+    }
+
     // ===== HTTP helpers =====
 
     private <T> T get(String path, Map<String, String> query, Class<T> type) throws IOException {

@@ -1,11 +1,10 @@
 package com.openclaw.browser;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openclaw.browser.routes.*;
 import com.openclaw.browser.server.DualChannelBridge;
 import com.openclaw.common.config.PortDefaults;
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -17,7 +16,6 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
@@ -29,7 +27,8 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
  * Corresponds to TypeScript's browser/server.ts (Express on controlPort).
  *
  * <p>
- * All browser operations are delegated to {@link BrowserProfileService}.
+ * All browser operations are delegated to {@link BrowserProfileService} via
+ * the route handler classes in {@link com.openclaw.browser.routes}.
  * </p>
  */
 @Slf4j
@@ -42,13 +41,16 @@ public class BrowserControlServer {
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
     private Channel serverChannel;
-    private boolean headless = false;
 
     /** Per-profile dual-channel bridges (profile name → bridge). */
     private final ConcurrentHashMap<String, DualChannelBridge> bridges = new ConcurrentHashMap<>();
 
+    /** Shared route context for all route handlers. */
+    private final RouteContext routeContext;
+
     public BrowserControlServer(BrowserProfileService profileService) {
         this.profileService = profileService;
+        this.routeContext = new RouteContext(profileService, bridges);
     }
 
     @PostConstruct
@@ -103,31 +105,34 @@ public class BrowserControlServer {
     }
 
     // =========================================================================
-    // Netty Handler
+    // Netty Handler — thin router that delegates to Route classes
     // =========================================================================
 
     private class BrowserControlHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
-            String uri = request.uri();
-            QueryStringDecoder decoder = new QueryStringDecoder(uri);
+            QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
             String path = decoder.path();
             HttpMethod method = request.method();
-            String profile = firstParam(decoder, "profile");
+            String profile = RouteContext.firstParam(decoder, "profile");
 
             try {
                 Object result = route(method, path, decoder, request, profile);
                 sendJson(ctx, OK, result);
-            } catch (BadRequestException e) {
-                sendJson(ctx, BAD_REQUEST, Map.of("ok", false, "error", e.getMessage()));
-            } catch (MethodNotAllowedException e) {
-                sendJson(ctx, METHOD_NOT_ALLOWED, Map.of("ok", false, "error", "method not allowed"));
-            } catch (NotFoundException e) {
-                sendJson(ctx, NOT_FOUND, Map.of("ok", false, "error", "not found: " + path));
+            } catch (RouteContext.BadRequestException e) {
+                sendJson(ctx, BAD_REQUEST,
+                        java.util.Map.of("ok", false, "error", e.getMessage()));
+            } catch (RouteContext.MethodNotAllowedException e) {
+                sendJson(ctx, METHOD_NOT_ALLOWED,
+                        java.util.Map.of("ok", false, "error", "method not allowed"));
+            } catch (RouteContext.NotFoundException e) {
+                sendJson(ctx, NOT_FOUND,
+                        java.util.Map.of("ok", false, "error", "not found: " + path));
             } catch (Exception e) {
                 log.error("Browser control error on {}: {}", path, e.getMessage(), e);
-                sendJson(ctx, INTERNAL_SERVER_ERROR, Map.of("ok", false, "error", e.getMessage()));
+                sendJson(ctx, INTERNAL_SERVER_ERROR,
+                        java.util.Map.of("ok", false, "error", e.getMessage()));
             }
         }
 
@@ -137,412 +142,126 @@ public class BrowserControlServer {
             ctx.close();
         }
 
-        // =====================================================================
-        // Router
-        // =====================================================================
+        // =================================================================
+        // Router — dispatches to Route classes
+        // =================================================================
 
         private Object route(HttpMethod method, String path, QueryStringDecoder decoder,
-                FullHttpRequest request, String profile) throws Exception {
+                             FullHttpRequest request, String profile) throws Exception {
 
-            // GET /
-            if ("/".equals(path) && method == HttpMethod.GET) {
-                return handleStatus(profile);
-            }
+            // ----- Basic lifecycle -----
+            if ("/".equals(path) && method == HttpMethod.GET)
+                return BasicRoutes.handleStatus(routeContext, profile);
+            if ("/start".equals(path) && method == HttpMethod.POST)
+                return BasicRoutes.handleStart(routeContext, request, profile);
+            if ("/stop".equals(path) && method == HttpMethod.POST)
+                return BasicRoutes.handleStop(routeContext, profile);
+            if (path.startsWith("/profiles"))
+                return BasicRoutes.handleProfiles(routeContext, method, path, request);
+            if ("/channels".equals(path) && method == HttpMethod.GET)
+                return BasicRoutes.handleChannels(routeContext, profile);
+            if ("/reset-profile".equals(path) && method == HttpMethod.POST)
+                return BasicRoutes.handleResetProfile(routeContext, profile);
 
-            // POST /start
-            if ("/start".equals(path) && method == HttpMethod.POST) {
-                return handleStart(request, profile);
-            }
+            // ----- Tabs -----
+            if (path.startsWith("/tabs"))
+                return TabRoutes.handle(routeContext, method, path, request, profile);
 
-            // POST /stop
-            if ("/stop".equals(path) && method == HttpMethod.POST) {
-                return handleStop(profile);
-            }
+            // ----- Navigation / Actions -----
+            if ("/navigate".equals(path) && method == HttpMethod.POST)
+                return ActRoutes.handleNavigate(routeContext, request, profile);
+            if ("/act".equals(path) && method == HttpMethod.POST)
+                return ActRoutes.handleAct(routeContext, request, profile);
+            if ("/console".equals(path) && method == HttpMethod.GET)
+                return ActRoutes.handleConsole(routeContext, decoder, profile);
 
-            // /profiles/**
-            if (path.startsWith("/profiles")) {
-                return handleProfiles(method, path, request);
-            }
+            // ----- Snapshot / Screenshot -----
+            if ("/snapshot".equals(path) && method == HttpMethod.GET)
+                return SnapshotRoutes.handleSnapshot(routeContext, decoder, profile);
+            if ("/screenshot".equals(path) && method == HttpMethod.POST)
+                return SnapshotRoutes.handleScreenshot(routeContext, request, profile);
+            if ("/screenshot-labels".equals(path) && method == HttpMethod.POST)
+                return SnapshotRoutes.handleScreenshotWithLabels(routeContext, request, profile);
 
-            // /tabs/**
-            if (path.startsWith("/tabs")) {
-                return handleTabs(method, path, request, profile);
-            }
+            // ----- Cookies -----
+            if ("/cookies".equals(path) && method == HttpMethod.GET)
+                return StorageRoutes.handleCookies(routeContext, decoder, profile);
+            if ("/cookies".equals(path) && method == HttpMethod.POST)
+                return StorageRoutes.handleCookiesSet(routeContext, request, profile);
+            if ("/cookies".equals(path) && method == HttpMethod.DELETE)
+                return StorageRoutes.handleCookiesClear(routeContext, profile);
 
-            // POST /navigate
-            if ("/navigate".equals(path) && method == HttpMethod.POST) {
-                return handleNavigate(request, profile);
-            }
+            // ----- Storage -----
+            if ("/storage".equals(path) && method == HttpMethod.GET)
+                return StorageRoutes.handleStorageGet(routeContext, decoder, profile);
+            if ("/storage".equals(path) && method == HttpMethod.POST)
+                return StorageRoutes.handleStorageSet(routeContext, request, profile);
+            if ("/storage".equals(path) && method == HttpMethod.DELETE)
+                return StorageRoutes.handleStorageClear(routeContext, decoder, profile);
 
-            // GET /snapshot
-            if ("/snapshot".equals(path) && method == HttpMethod.GET) {
-                return handleSnapshot(decoder, profile);
-            }
+            // ----- Debug / Observe -----
+            if ("/errors".equals(path) && method == HttpMethod.GET)
+                return HooksRoutes.handleErrors(routeContext, decoder, profile);
+            if ("/requests".equals(path) && method == HttpMethod.GET)
+                return HooksRoutes.handleRequests(routeContext, decoder, profile);
+            if ("/highlight".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handleHighlight(routeContext, request, profile);
 
-            // POST /screenshot
-            if ("/screenshot".equals(path) && method == HttpMethod.POST) {
-                return handleScreenshot(request, profile);
-            }
+            // ----- PDF -----
+            if ("/pdf".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handlePdf(routeContext, request, profile);
 
-            // POST /act
-            if ("/act".equals(path) && method == HttpMethod.POST) {
-                return handleAct(request, profile);
-            }
+            // ----- Hooks -----
+            if ("/hooks/dialog".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handleHooksDialog(routeContext, request, profile);
+            if ("/hooks/file-chooser".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handleHooksFileChooser(routeContext, request, profile);
+            if ("/hooks/arm-upload".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handleArmUpload(routeContext, request, profile);
+            if ("/hooks/arm-dialog".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handleArmDialog(routeContext, request, profile);
 
-            // GET /console
-            if ("/console".equals(path) && method == HttpMethod.GET) {
-                return handleConsole(decoder, profile);
-            }
+            // ----- Console -----
+            if ("/console".equals(path) && method == HttpMethod.GET)
+                return HooksRoutes.handleConsole(routeContext, decoder, profile);
 
-            // GET /channels — dual-channel status
-            if ("/channels".equals(path) && method == HttpMethod.GET) {
-                return handleChannels(profile);
-            }
+            // ----- Trace -----
+            if ("/trace/start".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handleTraceStart(routeContext, request, profile);
+            if ("/trace/stop".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handleTraceStop(routeContext, request, profile);
 
-            // POST /pdf
-            if ("/pdf".equals(path)) {
-                throw new BadRequestException("PDF export not yet implemented");
-            }
+            // ----- State -----
+            if ("/state/offline".equals(path) && method == HttpMethod.POST)
+                return StateRoutes.handleSetOffline(routeContext, request, profile);
+            if ("/state/headers".equals(path) && method == HttpMethod.POST)
+                return StateRoutes.handleSetHeaders(routeContext, request, profile);
+            if ("/state/credentials".equals(path) && method == HttpMethod.POST)
+                return StateRoutes.handleSetCredentials(routeContext, request, profile);
+            if ("/state/geolocation".equals(path) && method == HttpMethod.POST)
+                return StateRoutes.handleSetGeolocation(routeContext, request, profile);
+            if ("/state/media".equals(path) && method == HttpMethod.POST)
+                return StateRoutes.handleSetMedia(routeContext, request, profile);
 
-            // Stubs
-            if (path.startsWith("/hooks/")) {
-                return Map.of("ok", true);
-            }
+            // ----- Response Body -----
+            if ("/response/body".equals(path) && method == HttpMethod.POST)
+                return HooksRoutes.handleResponseBody(routeContext, request, profile);
 
-            throw new NotFoundException();
+            // ----- Resize -----
+            if ("/resize".equals(path) && method == HttpMethod.POST)
+                return StateRoutes.handleResize(routeContext, request, profile);
+
+            throw new RouteContext.NotFoundException();
         }
 
-        // =====================================================================
-        // Handlers
-        // =====================================================================
-
-        private Object handleStatus(String profile) {
-            String resolved = profileService.resolveProfileName(profile);
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("enabled", true);
-            body.put("profile", resolved);
-            body.put("running", profileService.isRunning(profile));
-            body.put("headless", headless);
-            return body;
-        }
-
-        private Object handleStart(FullHttpRequest request, String profile) {
-            Map<String, Object> reqBody = readBody(request);
-            PlaywrightSession session = profileService.getOrCreateSession(profile);
-            String resolvedName = profileService.resolveProfileName(profile);
-
-            if (session.isRunning()) {
-                // Ensure bridge exists for already-running session
-                ensureBridge(resolvedName, session);
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("ok", true);
-                result.put("profile", resolvedName);
-                result.put("message", "already running");
-                result.put("channels", getBridgeInfo(resolvedName));
-                return result;
-            }
-
-            String cdpUrl = reqBody != null ? (String) reqBody.get("cdpUrl") : null;
-            if (reqBody != null && reqBody.containsKey("headless")) {
-                headless = Boolean.TRUE.equals(reqBody.get("headless"));
-            }
-
-            if (cdpUrl != null && !cdpUrl.isBlank()) {
-                session.connectCDP(cdpUrl);
-            } else {
-                session.launch(headless);
-            }
-
-            // Discover CDP direct channel after browser start
-            DualChannelBridge bridge = ensureBridge(resolvedName, session);
-            if (cdpUrl != null && !cdpUrl.isBlank()) {
-                bridge.discoverCdp(cdpUrl);
-            } else {
-                // For launched browser, try default CDP port
-                bridge.discoverCdp("http://127.0.0.1:9222");
-            }
-
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("ok", true);
-            result.put("profile", resolvedName);
-            result.put("channels", getBridgeInfo(resolvedName));
-            return result;
-        }
-
-        private Object handleStop(String profile) {
-            boolean stopped = profileService.stopSession(profile);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("ok", true);
-            result.put("profile", profileService.resolveProfileName(profile));
-            result.put("stopped", stopped);
-            return result;
-        }
-
-        private Object handleProfiles(HttpMethod method, String path, FullHttpRequest request)
-                throws Exception {
-            // POST /profiles/create
-            if (method == HttpMethod.POST && "/profiles/create".equals(path)) {
-                Map<String, Object> reqBody = readBody(request);
-                String name = reqBody != null ? (String) reqBody.get("name") : null;
-                String color = reqBody != null ? (String) reqBody.get("color") : null;
-                String cdpUrl = reqBody != null ? (String) reqBody.get("cdpUrl") : null;
-                if (name == null || name.isBlank()) {
-                    throw new BadRequestException("name is required");
-                }
-                BrowserProfileService.CreateProfileResult r = profileService.createProfile(name, color, cdpUrl);
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("ok", r.isOk());
-                result.put("profile", r.getProfile());
-                result.put("cdpPort", r.getCdpPort());
-                result.put("cdpUrl", r.getCdpUrl());
-                result.put("color", r.getColor());
-                return result;
-            }
-
-            // DELETE /profiles/{name}
-            if (method == HttpMethod.DELETE && path.startsWith("/profiles/")) {
-                String name = path.substring("/profiles/".length());
-                if (name.isEmpty())
-                    throw new BadRequestException("profile name is required");
-                BrowserProfileService.DeleteProfileResult r = profileService.deleteProfile(name);
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("ok", r.isOk());
-                result.put("profile", r.getProfile());
-                result.put("stopped", r.isStopped());
-                return result;
-            }
-
-            // GET /profiles
-            if (method != HttpMethod.GET)
-                throw new MethodNotAllowedException();
-            List<BrowserProfileService.ProfileStatus> profiles = profileService.listProfiles();
-            List<Map<String, Object>> list = profiles.stream().map(p -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("name", p.getName());
-                m.put("cdpPort", p.getCdpPort());
-                m.put("cdpUrl", p.getCdpUrl());
-                m.put("color", p.getColor());
-                m.put("running", p.isRunning());
-                m.put("isDefault", p.isDefault());
-                return m;
-            }).toList();
-            return Map.of("profiles", list);
-        }
-
-        private Object handleTabs(HttpMethod method, String path, FullHttpRequest request,
-                String profile) {
-            // POST /tabs/open
-            if (method == HttpMethod.POST && "/tabs/open".equals(path)) {
-                Map<String, Object> reqBody = readBody(request);
-                String url = reqBody != null ? (String) reqBody.get("url") : null;
-                if (url == null || url.isBlank())
-                    throw new BadRequestException("url is required");
-                PlaywrightSession session = ensureBrowserStarted(profile);
-                PlaywrightSession.TabInfo tab = session.openTab(url);
-                return tabToMap(tab);
-            }
-
-            // POST /tabs/focus
-            if (method == HttpMethod.POST && "/tabs/focus".equals(path)) {
-                Map<String, Object> reqBody = readBody(request);
-                String targetId = reqBody != null ? (String) reqBody.get("targetId") : null;
-                if (targetId == null || targetId.isBlank())
-                    throw new BadRequestException("targetId is required");
-                PlaywrightSession session = profileService.getOrCreateSession(profile);
-                session.focusTab(targetId);
-                return Map.of("ok", true);
-            }
-
-            // DELETE /tabs/{targetId}
-            if (method == HttpMethod.DELETE && path.startsWith("/tabs/")) {
-                String targetId = path.substring("/tabs/".length());
-                PlaywrightSession session = profileService.getOrCreateSession(profile);
-                session.closeTab(targetId);
-                return Map.of("ok", true);
-            }
-
-            // GET /tabs
-            if (method != HttpMethod.GET)
-                throw new MethodNotAllowedException();
-            if (!profileService.isRunning(profile)) {
-                return Map.of("running", false, "tabs", List.of());
-            }
-            PlaywrightSession session = profileService.getOrCreateSession(profile);
-            List<PlaywrightSession.TabInfo> tabs = session.listTabs();
-            return Map.of("running", true, "tabs", tabs.stream().map(this::tabToMap).toList());
-        }
-
-        private Object handleNavigate(FullHttpRequest request, String profile) {
-            Map<String, Object> reqBody = readBody(request);
-            String url = reqBody != null ? (String) reqBody.get("url") : null;
-            String targetId = reqBody != null ? (String) reqBody.get("targetId") : null;
-            if (url == null || url.isBlank())
-                throw new BadRequestException("url is required");
-            PlaywrightSession session = ensureBrowserStarted(profile);
-            PlaywrightSession.NavigateResult nav = session.navigate(url, targetId);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("ok", true);
-            result.put("url", nav.getUrl());
-            result.put("title", nav.getTitle());
-            return result;
-        }
-
-        private Object handleSnapshot(QueryStringDecoder decoder, String profile) {
-            String targetId = firstParam(decoder, "targetId");
-            PlaywrightSession session = ensureBrowserStarted(profile);
-            String resolvedName = profileService.resolveProfileName(profile);
-            DualChannelBridge bridge = bridges.get(resolvedName);
-
-            PlaywrightSession.SnapshotResult snap;
-            String channel;
-            if (bridge != null && bridge.isCdpAvailable()) {
-                snap = bridge.snapshotDual(targetId);
-                channel = "cdp";
-            } else {
-                snap = session.snapshot(targetId);
-                channel = "playwright";
-            }
-
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("ok", true);
-            result.put("format", "aria");
-            result.put("snapshot", snap.getSnapshot());
-            result.put("url", snap.getUrl());
-            result.put("title", snap.getTitle());
-            result.put("channel", channel);
-            return result;
-        }
-
-        private Object handleScreenshot(FullHttpRequest request, String profile) {
-            Map<String, Object> reqBody = readBody(request);
-            PlaywrightSession session = ensureBrowserStarted(profile);
-            String resolvedName = profileService.resolveProfileName(profile);
-            String targetId = reqBody != null ? (String) reqBody.get("targetId") : null;
-            boolean fullPage = reqBody != null && Boolean.TRUE.equals(reqBody.get("fullPage"));
-            String ref = reqBody != null ? (String) reqBody.get("ref") : null;
-            String element = reqBody != null ? (String) reqBody.get("element") : null;
-
-            PlaywrightSession.ScreenshotResult shot;
-            String channel;
-            DualChannelBridge bridge = bridges.get(resolvedName);
-            if (bridge != null) {
-                shot = bridge.screenshotDual(targetId, fullPage, ref, element);
-                channel = bridge.isCdpAvailable() && ref == null && element == null && !fullPage
-                        ? "cdp" : "playwright";
-            } else {
-                shot = session.screenshot(targetId, fullPage);
-                channel = "playwright";
-            }
-
-            String base64 = Base64.getEncoder().encodeToString(shot.getBuffer());
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("ok", true);
-            result.put("data", base64);
-            result.put("contentType", shot.getContentType());
-            result.put("url", shot.getUrl());
-            result.put("title", shot.getTitle());
-            result.put("channel", channel);
-            return result;
-        }
-
-        private Object handleAct(FullHttpRequest request, String profile) {
-            Map<String, Object> reqBody = readBody(request);
-            String kind = reqBody != null ? (String) reqBody.get("kind") : null;
-            String targetId = reqBody != null ? (String) reqBody.get("targetId") : null;
-            if (kind == null || kind.isBlank())
-                throw new BadRequestException("kind is required");
-            PlaywrightSession session = ensureBrowserStarted(profile);
-            return session.act(kind, targetId, reqBody);
-        }
-
-        private Object handleConsole(QueryStringDecoder decoder, String profile) {
-            String targetId = firstParam(decoder, "targetId");
-            if (!profileService.isRunning(profile)) {
-                return Map.of("ok", true, "messages", List.of());
-            }
-            PlaywrightSession session = profileService.getOrCreateSession(profile);
-            List<PlaywrightSession.ConsoleEntry> messages = session.getConsoleMessages(targetId);
-            List<Map<String, Object>> mapped = messages.stream().map(e -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("type", e.getType());
-                m.put("text", e.getText());
-                m.put("timestamp", e.getTimestamp());
-                return m;
-            }).toList();
-            return Map.of("ok", true, "messages", mapped);
-        }
-
-        // =====================================================================
-        // Helpers
-        // =====================================================================
-
-        private PlaywrightSession ensureBrowserStarted(String profile) {
-            PlaywrightSession session = profileService.getOrCreateSession(profile);
-            if (!session.isRunning()) {
-                session.launch(headless);
-                // Discover CDP on first launch
-                String resolvedName = profileService.resolveProfileName(profile);
-                DualChannelBridge bridge = ensureBridge(resolvedName, session);
-                bridge.discoverCdp("http://127.0.0.1:9222");
-            }
-            return session;
-        }
-
-        private Object handleChannels(String profile) {
-            String resolvedName = profileService.resolveProfileName(profile);
-            DualChannelBridge bridge = bridges.get(resolvedName);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("ok", true);
-            result.put("profile", resolvedName);
-            if (bridge != null) {
-                result.put("channels", bridge.getChannelInfo());
-            } else {
-                result.put("channels", Map.of(
-                        "playwright", profileService.isRunning(profile),
-                        "cdpDirect", false));
-            }
-            return result;
-        }
-
-        private DualChannelBridge ensureBridge(String resolvedName, PlaywrightSession session) {
-            return bridges.computeIfAbsent(resolvedName,
-                    k -> new DualChannelBridge(session));
-        }
-
-        private Map<String, Object> getBridgeInfo(String resolvedName) {
-            DualChannelBridge bridge = bridges.get(resolvedName);
-            if (bridge != null) {
-                return bridge.getChannelInfo();
-            }
-            return Map.of("playwright", true, "cdpDirect", false);
-        }
-
-        private Map<String, Object> tabToMap(PlaywrightSession.TabInfo tab) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("targetId", tab.getTargetId());
-            m.put("url", tab.getUrl());
-            m.put("title", tab.getTitle());
-            return m;
-        }
-
-        private Map<String, Object> readBody(FullHttpRequest request) {
-            try {
-                ByteBuf content = request.content();
-                if (content.readableBytes() == 0)
-                    return null;
-                byte[] bytes = new byte[content.readableBytes()];
-                content.readBytes(bytes);
-                return mapper.readValue(bytes, new TypeReference<>() {
-                });
-            } catch (Exception e) {
-                return null;
-            }
-        }
+        // =================================================================
+        // JSON response helper
+        // =================================================================
 
         private void sendJson(ChannelHandlerContext ctx, HttpResponseStatus status, Object body) {
             try {
                 byte[] bytes = mapper.writeValueAsBytes(body);
-                ByteBuf buf = Unpooled.wrappedBuffer(bytes);
+                var buf = Unpooled.wrappedBuffer(bytes);
                 FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, status, buf);
                 response.headers().set(CONTENT_TYPE, "application/json");
                 response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, bytes.length);
@@ -552,32 +271,5 @@ public class BrowserControlServer {
                 ctx.close();
             }
         }
-    }
-
-    // =========================================================================
-    // Query string helper
-    // =========================================================================
-
-    private static String firstParam(QueryStringDecoder decoder, String key) {
-        List<String> values = decoder.parameters().get(key);
-        if (values == null || values.isEmpty())
-            return null;
-        return values.get(0);
-    }
-
-    // =========================================================================
-    // Exception types for routing
-    // =========================================================================
-
-    private static class BadRequestException extends RuntimeException {
-        BadRequestException(String msg) {
-            super(msg);
-        }
-    }
-
-    private static class MethodNotAllowedException extends RuntimeException {
-    }
-
-    private static class NotFoundException extends RuntimeException {
     }
 }

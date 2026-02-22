@@ -1,6 +1,6 @@
 # Browser 模块指南
 
-> **openclaw-browser** — AI Agent 的浏览器自动化能力层，采用 **CDP 直连 + Playwright** 双通道架构。
+> **openclaw-browser** — AI Agent 的浏览器自动化能力层，采用 **CDP 直连 + Playwright 1.58** 双通道架构。
 
 ## 架构概览
 
@@ -137,6 +137,8 @@ ExtensionRelayManager → 端口→实例单例管理
 ```
 PlaywrightSession → 持久 CDP 连接、Page 管理、状态跟踪
 PwToolsCore       → 交互/快照/状态/导航/下载/追踪
+PageState         → 请求生命周期/Console/Role refs 跟踪
+PwToolsShared     → ref 解析/超时规范化/AI 友好错误
 ```
 
 **PlaywrightSession 管理**：
@@ -164,6 +166,44 @@ session.close();
 | 追踪   | `startTracing`, `stopTracing`, `trackPageState`                             |
 | 下载   | `waitForDownload`, `saveDownload`                                           |
 | 对话框 | `acceptDialog`, `dismissDialog`                                             |
+| 媒体   | `emulateMedia`, `clearPermissions`                                          |
+
+### 5. PlaywrightSession act() 操作矩阵
+
+`PlaywrightSession.act()` 通过 switch 分发 19 种浏览器操作：
+
+| 操作                 | 参数                                           | 说明                 |
+| -------------------- | ---------------------------------------------- | -------------------- |
+| `click`              | ref, doubleClick, button, modifiers            | 点击元素             |
+| `type`               | ref, text, submit, slowly                      | 输入文本             |
+| `press`              | key, delayMs                                   | 按键                 |
+| `hover`              | ref                                            | 悬停                 |
+| `scrollIntoView`     | ref                                            | 滚动到可见           |
+| `drag`               | startRef, endRef                               | 拖拽                 |
+| `select`             | ref, values                                    | 选择下拉选项         |
+| `fill` / `form_fill` | fields[]                                       | 批量表单填充         |
+| `resize`             | width, height                                  | 调整视口大小         |
+| `wait`               | timeMs/text/textGone/selector/url/loadState/fn | 7 种等待模式         |
+| `evaluate`           | fn, ref                                        | 执行 JavaScript      |
+| `goBack`             | —                                              | 浏览器后退           |
+| `goForward`          | —                                              | 浏览器前进           |
+| `close`              | —                                              | 关闭页面             |
+| `download`           | ref, path                                      | 下载文件             |
+| `wait_for_download`  | path                                           | 等待下载完成         |
+| `set_input_files`    | ref/element, paths[]                           | 设置文件上传         |
+| `set_locale`         | locale                                         | 设置语言（CDP）      |
+| `set_timezone`       | timezoneId                                     | 设置时区（CDP）      |
+| `set_device`         | name                                           | 模拟设备（CDP + UA） |
+| `response_body`      | url, timeoutMs, maxChars                       | 捕获请求响应体       |
+
+### 6. 快照处理 (`com.openclaw.browser.snapshot`)
+
+```
+RoleSnapshot          → Aria snapshot → 结构化 role/refs 映射
+AiSnapshotFormatter   → 大页面截断 (maxChars 参数)
+```
+
+**AiSnapshotFormatter** 在 `/snapshot` 路由中自动应用，支持 `maxChars` 查询参数截断超大页面快照。
 
 ### 7. 双通道接线 (`com.openclaw.browser.server.DualChannelBridge`)
 
@@ -243,12 +283,13 @@ graph LR
 
 ```
 openclaw-browser/src/main/java/com/openclaw/browser/
+├── BrowserClient.java           # HTTP 客户端 (47 个 API 方法)
 ├── BrowserConfig.java           # 配置解析
 ├── BrowserConstants.java        # 常量定义
 ├── BrowserControlServer.java    # HTTP 控制服务器 (集成 DualChannelBridge)
 ├── BrowserProfiles.java         # Profile 管理
 ├── BrowserTypes.java            # 公共类型
-├── PlaywrightSession.java       # Playwright 核心会话
+├── PlaywrightSession.java       # Playwright 核心会话 (19 种 act 操作)
 ├── cdp/                         # CDP 直连层
 │   ├── CdpTypes.java
 │   ├── CdpHelpers.java
@@ -264,10 +305,22 @@ openclaw-browser/src/main/java/com/openclaw/browser/
 │   ├── ExtensionRelayServer.java
 │   └── ExtensionRelayManager.java
 ├── playwright/                  # Playwright 工具扩展
-│   ├── PlaywrightSession.java   # 增强版会话
-│   └── PwToolsCore.java
+│   ├── PwToolsCore.java
+│   ├── PwToolsShared.java       # ref 解析/超时规范化
+│   ├── PageState.java           # 请求生命周期跟踪
+│   └── BrowserActionTypes.java  # 操作类型枚举
+├── routes/                      # HTTP 路由处理
+│   ├── RouteContext.java        # 路由上下文
+│   ├── BasicRoutes.java         # 基础路由 (start/stop/status)
+│   ├── SnapshotRoutes.java      # 快照/截图路由
+│   ├── TabRoutes.java           # 标签页管理路由
+│   ├── HooksRoutes.java         # 对话框/上传/追踪/响应体路由
+│   └── StateRoutes.java         # 状态管理路由
 ├── screenshot/                  # 截图优化
 │   └── ScreenshotNormalizer.java
+├── snapshot/                    # 快照处理
+│   ├── RoleSnapshot.java        # Role/refs 映射
+│   └── AiSnapshotFormatter.java # 大页面截断
 └── server/                      # 服务端
     ├── BrowserServerContext.java
     └── DualChannelBridge.java   # ← 双通道接线
@@ -357,33 +410,58 @@ sequenceDiagram
 
 ```
 openclaw-browser/src/main/java/com/openclaw/browser/
+├── BrowserClient.java           # HTTP 客户端 (47 个 API 方法)
 ├── BrowserConfig.java           # 配置解析
 ├── BrowserConstants.java        # 常量定义
 ├── BrowserControlServer.java    # HTTP 控制服务器
 ├── BrowserProfiles.java         # Profile 管理
 ├── BrowserTypes.java            # 公共类型
+├── PlaywrightSession.java       # Playwright 核心会话
 ├── cdp/                         # CDP 直连层
-│   ├── CdpTypes.java
-│   ├── CdpHelpers.java
-│   ├── CdpClient.java
-│   └── CdpOperations.java
 ├── chrome/                      # Chrome 进程管理
-│   ├── RunningChrome.java
-│   ├── ChromeExecutables.java
-│   ├── ChromeProfileDecoration.java
-│   └── ChromeManager.java
 ├── relay/                       # Extension Relay
-│   ├── ExtensionRelayTypes.java
-│   ├── ExtensionRelayServer.java
-│   └── ExtensionRelayManager.java
-├── playwright/                  # Playwright 工具
-│   ├── PlaywrightSession.java
-│   └── PwToolsCore.java
+├── routes/                      # HTTP 路由处理 (6 个路由类)
+├── playwright/                  # Playwright 工具 (4 个辅助类)
 ├── screenshot/                  # 截图优化
-│   └── ScreenshotNormalizer.java
-└── server/                      # 服务端上下文
-    └── BrowserServerContext.java
+├── snapshot/                    # 快照处理 (RoleSnapshot + AiSnapshotFormatter)
+└── server/                      # 服务端上下文 + DualChannelBridge
 ```
+
+### HTTP API 路由表
+
+| 路由                  | 方法 | 说明                     |
+| --------------------- | ---- | ------------------------ |
+| `/`                   | GET  | 浏览器状态               |
+| `/start`              | POST | 启动浏览器               |
+| `/stop`               | POST | 停止浏览器               |
+| `/channels`           | GET  | 双通道状态               |
+| `/reset-profile`      | POST | 重置 Profile             |
+| `/navigate`           | POST | 导航到 URL               |
+| `/act`                | POST | 执行操作 (19 种)         |
+| `/snapshot`           | GET  | 页面快照 (支持 maxChars) |
+| `/screenshot`         | POST | 截图                     |
+| `/screenshot-labels`  | POST | 带标注的截图             |
+| `/console`            | GET  | Console 消息             |
+| `/errors`             | GET  | 页面错误                 |
+| `/requests`           | GET  | 网络请求                 |
+| `/highlight`          | POST | 高亮元素                 |
+| `/pdf`                | POST | 保存为 PDF               |
+| `/cookies`            | CRUD | Cookie 管理              |
+| `/storage`            | CRUD | LocalStorage/Session     |
+| `/hooks/dialog`       | POST | 对话框处理               |
+| `/hooks/file-chooser` | POST | 文件选择器               |
+| `/hooks/arm-upload`   | POST | 预注册上传处理           |
+| `/hooks/arm-dialog`   | POST | 预注册对话框处理         |
+| `/response/body`      | POST | 捕获响应体               |
+| `/trace/start`        | POST | 开始追踪                 |
+| `/trace/stop`         | POST | 停止追踪                 |
+| `/state/offline`      | POST | 离线模式                 |
+| `/state/headers`      | POST | 额外 HTTP 头             |
+| `/state/credentials`  | POST | HTTP 认证                |
+| `/state/geolocation`  | POST | 地理位置                 |
+| `/state/media`        | POST | 媒体模拟                 |
+| `/resize`             | POST | 调整视口                 |
+| `/tabs/*`             | CRUD | 标签页管理               |
 
 ---
 
