@@ -7,6 +7,8 @@ import com.openclaw.gateway.auth.AuthService;
 import com.openclaw.node.DevicePairingService;
 import com.openclaw.node.NodePairingService;
 import com.openclaw.node.NodeRegistry;
+import com.openclaw.node.NodeCommandPolicy;
+import com.openclaw.node.NodeSubscriptionManager;
 import com.openclaw.gateway.routing.RouteResolver;
 import com.openclaw.gateway.session.SessionStore;
 import com.openclaw.gateway.session.SessionTranscriptStore;
@@ -96,6 +98,16 @@ public class GatewayBeanConfig {
     @Bean
     public DevicePairingService devicePairingService(ObjectMapper objectMapper) {
         return new DevicePairingService(resolveStateDir(), objectMapper);
+    }
+
+    @Bean
+    public NodeCommandPolicy nodeCommandPolicy() {
+        return new NodeCommandPolicy();
+    }
+
+    @Bean
+    public NodeSubscriptionManager nodeSubscriptionManager(ObjectMapper objectMapper) {
+        return new NodeSubscriptionManager(objectMapper);
     }
 
     @Bean

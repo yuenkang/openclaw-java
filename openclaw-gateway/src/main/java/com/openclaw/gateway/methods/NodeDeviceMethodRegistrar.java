@@ -2,9 +2,13 @@ package com.openclaw.gateway.methods;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.openclaw.common.config.ConfigService;
+import com.openclaw.common.config.OpenClawConfig;
 import com.openclaw.node.DevicePairingService;
+import com.openclaw.node.NodeCommandPolicy;
 import com.openclaw.node.NodePairingService;
 import com.openclaw.node.NodeRegistry;
+import com.openclaw.node.NodeSubscriptionManager;
 import com.openclaw.gateway.websocket.EventBroadcaster;
 import com.openclaw.gateway.websocket.GatewayConnection;
 import com.openclaw.gateway.websocket.GatewayMethodRouter;
@@ -13,6 +17,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+
+import jakarta.annotation.PostConstruct;
+import org.springframework.stereotype.Component;
 
 /**
  * Registers node.* and device.* RPC method handlers.
@@ -26,6 +33,7 @@ import java.util.stream.Collectors;
  * device.token.rotate, device.token.revoke
  */
 @Slf4j
+@Component
 public class NodeDeviceMethodRegistrar {
 
     private final GatewayMethodRouter router;
@@ -34,21 +42,28 @@ public class NodeDeviceMethodRegistrar {
     private final DevicePairingService devicePairingService;
     private final EventBroadcaster broadcaster;
     private final ObjectMapper objectMapper;
+    private final ConfigService configService;
+    private final NodeSubscriptionManager subscriptionManager;
 
     public NodeDeviceMethodRegistrar(GatewayMethodRouter router,
             NodeRegistry nodeRegistry,
             NodePairingService nodePairingService,
             DevicePairingService devicePairingService,
             EventBroadcaster broadcaster,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ConfigService configService,
+            NodeSubscriptionManager subscriptionManager) {
         this.router = router;
         this.nodeRegistry = nodeRegistry;
         this.nodePairingService = nodePairingService;
         this.devicePairingService = devicePairingService;
         this.broadcaster = broadcaster;
         this.objectMapper = objectMapper;
+        this.configService = configService;
+        this.subscriptionManager = subscriptionManager;
     }
 
+    @PostConstruct
     public void registerMethods() {
         // --- Node pairing ---
         router.registerMethod("node.pair.request", this::handleNodePairRequest);
@@ -64,6 +79,8 @@ public class NodeDeviceMethodRegistrar {
         router.registerMethod("node.invoke", this::handleNodeInvoke);
         router.registerMethod("node.invoke.result", this::handleNodeInvokeResult);
         router.registerMethod("node.event", this::handleNodeEvent);
+        router.registerMethod("node.subscribe", this::handleNodeSubscribe);
+        router.registerMethod("node.unsubscribe", this::handleNodeUnsubscribe);
 
         // --- Device pairing ---
         router.registerMethod("device.pair.list", this::handleDevicePairList);
@@ -72,7 +89,7 @@ public class NodeDeviceMethodRegistrar {
         router.registerMethod("device.token.rotate", this::handleDeviceTokenRotate);
         router.registerMethod("device.token.revoke", this::handleDeviceTokenRevoke);
 
-        log.info("Registered 16 node/device methods");
+        log.info("Registered 18 node/device methods");
     }
 
     // ==================== Node Pairing ====================
@@ -298,6 +315,23 @@ public class NodeDeviceMethodRegistrar {
         if (node == null)
             return failedResult("node not connected");
 
+        // --- Command policy check ---
+        OpenClawConfig config = null;
+        try {
+            config = configService.loadConfig();
+        } catch (Exception e) {
+            log.debug("Failed to load config for command policy: {}", e.getMessage());
+        }
+        Set<String> allowlist = NodeCommandPolicy.resolveAllowlist(config,
+                node.getPlatform(), node.getDeviceFamily());
+        var check = NodeCommandPolicy.isCommandAllowed(command, node.getCommands(), allowlist);
+        if (!check.ok()) {
+            log.warn("Node invoke denied: nodeId={} command={} reason={}", nodeId, command, check.reason());
+            return CompletableFuture.completedFuture(Map.of(
+                    "ok", false,
+                    "error", Map.of("code", "DENIED", "message", check.reason())));
+        }
+
         Object invokeParams = null;
         if (params.has("params")) {
             invokeParams = objectMapper.convertValue(params.get("params"), Object.class);
@@ -354,11 +388,54 @@ public class NodeDeviceMethodRegistrar {
         String event = textOrNull(params, "event");
         if (event == null)
             return failedResult("event required");
-        // Forward as broadcast
+
         Object payload = params.has("payload")
                 ? objectMapper.convertValue(params.get("payload"), Object.class)
                 : null;
-        log.debug("Node event: {} payload={}", event, payload);
+        String payloadJSON = params.has("payloadJSON") ? textOrNull(params, "payloadJSON") : null;
+
+        // Determine source nodeId from the connection
+        String nodeId = conn.getClientId();
+        log.debug("Node event: {} from={} payload={}", event, nodeId, payload);
+
+        // Forward event to all subscribed sessions via EventBroadcaster
+        subscriptionManager.sendToAllSubscribed(event, payload,
+                (nId, pJSON) -> {
+                    try {
+                        nodeRegistry.sendEvent(nId, event, payload);
+                    } catch (Exception e) {
+                        log.warn("Failed to forward node event {} to {}: {}", event, nId, e.getMessage());
+                    }
+                });
+
+        // Also broadcast as a general gateway event
+        broadcaster.broadcastToAll("node.event." + event, Map.of(
+                "nodeId", nodeId != null ? nodeId : "unknown",
+                "event", event,
+                "payload", payload != null ? payload : Map.of()));
+
+        return CompletableFuture.completedFuture(Map.of("ok", true));
+    }
+
+    private CompletableFuture<Object> handleNodeSubscribe(JsonNode params, GatewayConnection conn) {
+        String nodeId = textOrNull(params, "nodeId");
+        String sessionKey = textOrNull(params, "sessionKey");
+        if (nodeId == null || sessionKey == null)
+            return failedResult("nodeId and sessionKey required");
+
+        subscriptionManager.subscribe(nodeId, sessionKey);
+        log.debug("Session {} subscribed to node {}", sessionKey, nodeId);
+        return CompletableFuture.completedFuture(Map.of("ok", true));
+    }
+
+    private CompletableFuture<Object> handleNodeUnsubscribe(JsonNode params, GatewayConnection conn) {
+        String nodeId = textOrNull(params, "nodeId");
+        String sessionKey = textOrNull(params, "sessionKey");
+        if (nodeId == null || sessionKey == null)
+            return failedResult("nodeId and sessionKey required");
+
+        subscriptionManager.unsubscribe(nodeId, sessionKey);
+        log.debug("Session {} unsubscribed from node {}", sessionKey, nodeId);
         return CompletableFuture.completedFuture(Map.of("ok", true));
     }
 

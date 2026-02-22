@@ -1,5 +1,38 @@
 # Changelog
 
+## Phase 50 — Browser & Node 模块功能完善 (2026-02-22)
+
+### Verified
+
+- `mvn clean test` BUILD SUCCESS — **78 tests** (含 27 新增), 0 failures, **15 模块** ✅
+
+### Added — openclaw-node 模块
+
+| 类型 | 文件 | 说明 |
+|------|------|------|
+| **新增** | `NodeCommandPolicy` | 平台命令白名单策略 (canvas/camera/screen/location/sms/system) |
+| **新增** | `NodeSubscriptionManager` | 节点 ↔ 会话双向事件订阅管理 |
+| **新增** | `NodeEventTypes` | NodeEvent record + NodeEventContext 接口 |
+| **新增** | `MobileNodes` | 移动端平台检测 (iOS/Android) |
+| **新增** | `NodeCommandPolicyTest` | 17 测试: 平台识别 + 白名单 + 权限检查 |
+| **新增** | `NodeSubscriptionManagerTest` | 7 测试: 订阅/取消/事件分发 |
+
+### Added — openclaw-browser 模块
+
+| 类型 | 文件 | 说明 |
+|------|------|------|
+| **新增** | `BrowserConfig` | 完整配置解析 (ResolvedBrowserConfig/ResolvedBrowserProfile) |
+| **新增** | `BrowserConstants` | 默认端口/超时/配置常量 |
+| **新增** | `BrowserConfigTest` | 11 测试: 配置解析 + profile + helpers |
+| **修改** | `BrowserClient` | +4 方法: resetProfile/createProfile/deleteProfile/tabAction |
+
+### Changed — openclaw-gateway 模块
+
+| 类型 | 文件 | 说明 |
+|------|------|------|
+| **修改** | `GatewayBeanConfig` | +2 Bean: NodeCommandPolicy, NodeSubscriptionManager |
+| **修改** | `NodeDeviceMethodRegistrar` | 升级为 @Component; handleNodeInvoke 增加命令权限检查; handleNodeEvent 增加订阅转发+广播; +2 RPC 方法: node.subscribe/node.unsubscribe |
+
 ## Phase 49 — 模块提取 & 包名统一重构 (2026-02-22)
 
 ### Verified

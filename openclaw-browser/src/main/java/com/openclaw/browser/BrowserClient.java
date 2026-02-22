@@ -183,6 +183,43 @@ public class BrowserClient {
         return post("/hooks/dialog", null, body, JsonNode.class);
     }
 
+    // ===== Profile CRUD =====
+
+    /** POST /profiles/reset — reset a profile's user data */
+    public JsonNode resetProfile(String profile) throws IOException {
+        return post("/profiles/reset", profileQuery(profile), null, JsonNode.class);
+    }
+
+    /** POST /profiles/create — create a new profile */
+    public JsonNode createProfile(String name, String color, String cdpUrl, String driver)
+            throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", name);
+        if (color != null) body.put("color", color);
+        if (cdpUrl != null) body.put("cdpUrl", cdpUrl);
+        if (driver != null) body.put("driver", driver);
+        return post("/profiles/create", null, body, JsonNode.class);
+    }
+
+    /** DELETE /profiles/{name} — delete a profile */
+    public JsonNode deleteProfile(String name) throws IOException {
+        Map<String, String> query = new LinkedHashMap<>();
+        query.put("profile", name);
+        // Use POST /profiles/delete instead of HTTP DELETE for compatibility
+        return post("/profiles/delete", query, null, JsonNode.class);
+    }
+
+    // ===== Tab Actions (unified) =====
+
+    /** POST /tabs/action — unified tab action (list|new|close|select) */
+    public JsonNode tabAction(String action, Integer index, String profile) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("action", action);
+        if (index != null) body.put("index", index);
+        if (profile != null) body.put("profile", profile);
+        return post("/tabs/action", null, body, JsonNode.class);
+    }
+
     // ===== HTTP helpers =====
 
     private <T> T get(String path, Map<String, String> query, Class<T> type) throws IOException {
