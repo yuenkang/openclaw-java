@@ -1,11 +1,11 @@
 package com.openclaw.hooks;
 
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
 class HookConfigTest {
 
@@ -46,8 +46,8 @@ class HookConfigTest {
     class HasBinary {
         @Test
         void findsCommonBinary() {
-            // "ls" should exist on macOS/Linux
-            assertTrue(HookConfig.hasBinary("ls"));
+            // "java" must exist since we are running inside a JVM
+            assertTrue(HookConfig.hasBinary("java"));
         }
 
         @Test

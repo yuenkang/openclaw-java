@@ -112,17 +112,26 @@ public final class HookConfig {
 
     /**
      * Check if a binary is available on PATH.
+     * On Windows, also checks for common executable extensions (.exe, .cmd, .bat).
      */
     public static boolean hasBinary(String bin) {
         String path = System.getenv("PATH");
         if (path == null || bin == null)
             return false;
 
+        boolean isWindows = resolveRuntimePlatform().equals("win32");
         String[] dirs = path.split(File.pathSeparator);
         for (String dir : dirs) {
             File candidate = new File(dir, bin);
             if (candidate.canExecute())
                 return true;
+            if (isWindows && !bin.contains(".")) {
+                for (String ext : new String[] { ".exe", ".cmd", ".bat" }) {
+                    File withExt = new File(dir, bin + ext);
+                    if (withExt.canExecute())
+                        return true;
+                }
+            }
         }
         return false;
     }
