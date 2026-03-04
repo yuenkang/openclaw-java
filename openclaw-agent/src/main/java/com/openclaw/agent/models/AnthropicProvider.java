@@ -35,7 +35,7 @@ public class AnthropicProvider implements ModelProvider {
 
     public AnthropicProvider(String apiKey, String baseUrl) {
         this.apiKey = apiKey;
-        this.baseUrl = baseUrl;
+        this.baseUrl = (baseUrl != null && !baseUrl.isBlank()) ? baseUrl : DEFAULT_BASE_URL;
         this.objectMapper = new ObjectMapper();
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofSeconds(30))
