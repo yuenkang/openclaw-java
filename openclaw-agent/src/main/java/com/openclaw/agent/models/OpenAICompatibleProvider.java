@@ -37,7 +37,7 @@ public class OpenAICompatibleProvider implements ModelProvider {
     public OpenAICompatibleProvider(String providerId, String apiKey, String baseUrl) {
         this.providerId = providerId;
         this.apiKey = apiKey;
-        this.baseUrl = baseUrl;
+        this.baseUrl = (baseUrl != null && !baseUrl.isBlank()) ? baseUrl : DEFAULT_BASE_URL;
         this.objectMapper = new ObjectMapper();
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofSeconds(30))

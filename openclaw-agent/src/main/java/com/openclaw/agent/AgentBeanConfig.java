@@ -1,6 +1,7 @@
 package com.openclaw.agent;
 
 import com.openclaw.agent.models.AnthropicProvider;
+import com.openclaw.agent.models.ModelProvider;
 import com.openclaw.agent.models.ModelProviderRegistry;
 import com.openclaw.agent.models.OpenAICompatibleProvider;
 import com.openclaw.agent.runtime.AgentRunner;
@@ -60,15 +61,16 @@ public class AgentBeanConfig {
     public ModelProviderRegistry modelProviderRegistry() {
         ModelProviderRegistry registry = new ModelProviderRegistry();
 
-        // Load aliases from config
+        // Load aliases and providers from config
         try {
             OpenClawConfig config = configService.loadConfig();
             registry.loadAliasesFromConfig(config);
+            registerProvidersFromConfig(registry, config);
         } catch (Exception e) {
             log.debug("Config not loaded for model aliases: {}", e.getMessage());
         }
 
-        // Register providers from environment variables
+        // Register providers from environment variables (may override config-based ones)
         registerProvidersFromEnv(registry);
 
         log.info("Registered {} model providers, {} aliases",
@@ -81,33 +83,48 @@ public class AgentBeanConfig {
         return new AgentRunner(modelProviderRegistry, toolRegistry);
     }
 
-    private void registerProvidersFromEnv(ModelProviderRegistry registry) {
-        String anthropicKey = System.getenv("ANTHROPIC_API_KEY");
-        if (anthropicKey != null && !anthropicKey.isBlank()) {
-            String anthropicBaseUrl = System.getenv("ANTHROPIC_BASE_URL");
-            if (anthropicBaseUrl != null && !anthropicBaseUrl.isBlank()) {
-                registry.register(new AnthropicProvider(anthropicKey, anthropicBaseUrl));
-                log.info("Anthropic provider registered with custom base URL: {}", anthropicBaseUrl);
-            } else {
-                registry.register(new AnthropicProvider(anthropicKey));
-                log.info("Anthropic provider registered with default base URL");
-            }
+    private void registerProvidersFromConfig(ModelProviderRegistry registry, OpenClawConfig config) {
+        if (config.getModels() == null || config.getModels().getProviders() == null) {
+            return;
         }
+        config.getModels().getProviders().forEach((id, pc) -> {
+            if (!pc.isEnabled()) return;
+            String apiKey = pc.getApiKey();
+            if (apiKey == null || apiKey.isBlank()) return;
 
-        String openaiKey = System.getenv("OPENAI_API_KEY");
-        if (openaiKey != null && !openaiKey.isBlank()) {
-            String openaiBaseUrl = System.getenv("OPENAI_BASE_URL");
-            if (openaiBaseUrl != null && !openaiBaseUrl.isBlank()) {
-                registry.register(new OpenAICompatibleProvider("openai", openaiKey, openaiBaseUrl));
-                log.info("OpenAI provider registered with custom base URL: {}", openaiBaseUrl);
-            } else {
-                registry.register(new OpenAICompatibleProvider(openaiKey));
-                log.info("OpenAI provider registered with default base URL");
-            }
-        }
+            String baseUrl = resolveBaseUrl(pc);
+            ModelProvider provider = createProvider(id, apiKey, baseUrl);
+            registry.register(provider);
+            log.info("Registered provider from config: {} (baseUrl={})", id, provider.getApiBaseUrl());
+        });
+    }
+
+    private void registerProvidersFromEnv(ModelProviderRegistry registry) {
+        registerEnvProvider(registry, "anthropic", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL");
+        registerEnvProvider(registry, "openai", "OPENAI_API_KEY", "OPENAI_BASE_URL");
 
         // Ollama (no API key needed)
         String ollamaUrl = System.getenv().getOrDefault("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1");
         registry.register(new OpenAICompatibleProvider("ollama", null, ollamaUrl));
+    }
+
+    private void registerEnvProvider(ModelProviderRegistry registry, String id, String keyEnv, String urlEnv) {
+        String apiKey = System.getenv(keyEnv);
+        if (apiKey == null || apiKey.isBlank()) return;
+
+        ModelProvider provider = createProvider(id, apiKey, System.getenv(urlEnv));
+        registry.register(provider);
+        log.info("Registered provider from env: {} (baseUrl={})", id, provider.getApiBaseUrl());
+    }
+
+    private static String resolveBaseUrl(OpenClawConfig.ProviderConfig pc) {
+        String url = pc.getBaseUrl();
+        return (url != null && !url.isBlank()) ? url : pc.getApiBaseUrl();
+    }
+
+    private static ModelProvider createProvider(String id, String apiKey, String baseUrl) {
+        return "anthropic".equals(id)
+                ? new AnthropicProvider(apiKey, baseUrl)
+                : new OpenAICompatibleProvider(id, apiKey, baseUrl);
     }
 }
